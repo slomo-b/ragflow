@@ -8,13 +8,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:fix": "next lint --fix",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "clean": "rm -rf .next out",
-    "ui:add": "npx shadcn-ui@latest add"
+    "ui:add": "npx shadcn-ui@latest add",
+    "analyze": "cross-env ANALYZE=true next build"
   },
   "dependencies": {
-    "@headlessui/react": "^2.2.4",
     "@heroicons/react": "^2.2.0",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -27,18 +29,14 @@
     "axios": "^1.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.408.0",
-    "nanoid": "^5.1.5",
     "next": "^14.2.30",
     "next-themes": "^0.4.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-dropzone": "^14.3.8",
     "react-hot-toast": "^2.5.2",
     "react-markdown": "^9.1.0",
-    "recharts": "^2.12.7",
     "tailwind-merge": "^3.3.1",
     "zustand": "^4.5.7"
   },
@@ -49,6 +47,7 @@
     "@typescript-eslint/eslint-plugin": "^7.16.1",
     "@typescript-eslint/parser": "^7.16.1",
     "autoprefixer": "^10.4.16",
+    "cross-env": "^7.0.3",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
     "postcss": "^8.4.31",
@@ -56,8 +55,26 @@
     "tailwindcss": "^3.3.7",
     "typescript": "^5.5.3"
   },
+  "optionalDependencies": {
+    "date-fns": "^3.6.0",
+    "nanoid": "^5.1.5",
+    "react-dropzone": "^14.3.8",
+    "recharts": "^2.12.7"
+  },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
