@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components; 
+@tailwind utilities;
+
+body {
+  font-family: Arial, sans-serif;
+}
+
+.bg-blue-500 {
+  background-color: #3b82f6;
+}
+
+.text-white {
+  color: white;
+}
+
+.p-4 {
+  padding: 1rem;
+}
+
+.rounded {
+  border-radius: 0.25rem;
+}

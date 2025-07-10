@@ -1,0 +1,10 @@
+{
+  "version": "3.0.0",
+  "features": {
+    "vector_embeddings": true,
+    "multilingual": false,
+    "ocr": true
+  },
+  "setup_date": "2025-07-10T18:29:24.064024",
+  "python_version": "3.13.5"
+}

@@ -1,0 +1,41 @@
+{
+  "e1500255-4766-45c5-9c98-e119d95c9a5b": {
+    "id": "e1500255-4766-45c5-9c98-e119d95c9a5b",
+    "name": "Test Projekt",
+    "description": "Aktualisierte Beschreibung für Test-Projekt",
+    "created_at": "2025-07-09T23:11:59.042134",
+    "updated_at": "2025-07-09T23:12:03.129955",
+    "document_ids": [],
+    "document_count": 0,
+    "chat_count": 0,
+    "status": "active",
+    "settings": {}
+  },
+  "b430a1e8-acc4-4a02-8bfd-0a4e0e4f0fb6": {
+    "id": "b430a1e8-acc4-4a02-8bfd-0a4e0e4f0fb6",
+    "name": "ragflow",
+    "description": "Project created on 10.7.2025",
+    "created_at": "2025-07-10T16:50:00.974473",
+    "updated_at": "2025-07-10T17:53:55.221019",
+    "document_ids": [
+      "c88430a3-56a7-453b-bfb9-bd3fd7c899b8",
+      "095fdd4f-89f6-4145-b539-4217cd90fd19"
+    ],
+    "document_count": 2,
+    "chat_count": 6,
+    "status": "active",
+    "settings": {}
+  },
+  "4ee3e191-ff53-489c-99aa-a42c7831edd8": {
+    "id": "4ee3e191-ff53-489c-99aa-a42c7831edd8",
+    "name": "fc<",
+    "description": "",
+    "created_at": "2025-07-10T17:20:34.715282",
+    "updated_at": "2025-07-10T17:20:34.715304",
+    "document_ids": [],
+    "document_count": 0,
+    "chat_count": 0,
+    "status": "active",
+    "settings": {}
+  }
+}

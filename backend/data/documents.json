@@ -1,0 +1,1578 @@
+{
+  "f56014be-a19d-48b5-9f99-212334f2130e": {
+    "id": "f56014be-a19d-48b5-9f99-212334f2130e",
+    "filename": "test_document.md",
+    "file_type": "md",
+    "file_size": 194,
+    "file_path": "uploads\\f56014be-a19d-48b5-9f99-212334f2130e_test_document.md",
+    "project_ids": [],
+    "tags": [
+      "test",
+      "backend",
+      "upload"
+    ],
+    "uploaded_at": "2025-07-09T23:12:09.333954",
+    "processing_status": "completed",
+    "chunk_count": 0,
+    "total_tokens": null,
+    "summary": null,
+    "extracted_text": "# Test Dokument\n\nDies ist ein Test-Dokument für das RagFlow Backend.\n\n## Inhalt\n- Erste Zeile\n- Zweite Zeile  \n- Dritte Zeile\n\nDas Backend sollte dieses Dokument verarbeiten können.\n",
+    "text_chunks": [
+      {
+        "id": "d7644d1d-72f3-4821-b011-1cd1e215aa5a",
+        "text": "# Test Dokument\n\nDies ist ein Test-Dokument für das RagFlow Backend.\n\n## Inhalt\n- Erste Zeile\n- Zweite Zeile  \n- Dritte Zeile\n\nDas Backend sollte dieses Dokument verarbeiten können.\n",
+        "start_pos": 0,
+        "end_pos": 182,
+        "chunk_index": 0
+      }
+    ],
+    "text_metadata": {
+      "word_count": 29,
+      "char_count": 182,
+      "chunk_count": 1,
+      "extraction_method": "md",
+      "processed_at": "2025-07-10T17:51:12.819899"
+    },
+    "processing_error": null,
+    "processed_at": "2025-07-10T17:51:12.819899"
+  },
+  "c88430a3-56a7-453b-bfb9-bd3fd7c899b8": {
+    "id": "c88430a3-56a7-453b-bfb9-bd3fd7c899b8",
+    "filename": "Abendkarte_210325.pdf",
+    "file_type": "pdf",
+    "file_size": 106622,
+    "file_path": "uploads\\c88430a3-56a7-453b-bfb9-bd3fd7c899b8_Abendkarte_210325.pdf",
+    "project_ids": [
+      "b430a1e8-acc4-4a02-8bfd-0a4e0e4f0fb6"
+    ],
+    "tags": [],
+    "uploaded_at": "2025-07-10T17:20:52.745168",
+    "processing_status": "completed",
+    "chunk_count": 0,
+    "total_tokens": null,
+    "summary": null,
+    "extracted_text": "[Seite 1]\nANTIPASTI\nL’INSALATA DI MISTICANZA CHF 16.50\nVerschiedene frische und knackige saisonale\nBlatt- und Rohkostsalate mit <Pane Carasau> und\nhausgemachtem Dressing.\nLA PARMIGIANA BUFALINA CHF 22.50\nHausgemachter Auberginenauflauf mit San Marzanosauce,\nParmesan, Basilikum und Büffelmozzarella DOP.\nFIOR DI PRIMAVERA CHF 26.50\nKnusprige Zucchiniblüten gefüllt mit Pecorino Romano auf\ngerösteter roter Paprika Creme, grünem Spargel und Limetten-\nJoghurt.\nIL POLIPO D’AUTORE CHF 29.50\nGebratener Oktopus auf einer feinen Saubohnencreme mit\nfrischer Fenchel Julienne, knusprigem Guanciale und einer\nOrangenreduktion.\nIL VITELLO “ANIMA E CORE” CHF 29.50\nKalbsmocken «Sous Vide» in feine Scheiben geschnitten mit\napulischer Burrata gefüllter Artischocke, Kräuter Brotbrösel und\nSüss -Saure rote Zwiebeln.\nTAGLIERI\nI TAGLIERI «L’ANTIPASTO DELL’OSTERIA»\nItalienische Vorspeisen-Plättli mit diversen Salami-, Prosciutto-\nund Käse-Spezialitäten aus eigenem Import.\nPiccolo für 1 Person CHF 24.00\nMedio für 2 Personen CHF 39.00\nGrande für 4 Personen CHF 74.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 2]\nI PRIMI\nGNOCCHETTI DI MAMMA BRUNA CHF 25.50/ 27.50\nHausgemachte Kartoffel-Gnocchetti al Ragù della Casa\noder an Tomatensauce mit Basilikum.\nRISOTTO IN ARMONIA CHF 29.50\nCarnaroli Risotto mit Safran, grünem Spargel,\nKräuterseitlinge und Tropfen vom gereiftem\nBalsamico Essig IGP.\nPACCHERI DI GRAGNANO ALLE VONGOLE VERACI CHF 29.50\nRöhrennudeln mit frischen Venusmuscheln, Knoblauch,\nPeperoncino, Cherrytomaten und Petersilie.\nAGNOLOTTI PIEMONTESI CHF 29.50\nHandgemachte, mit Kalb gefüllte, piemontesische Teigtaschen\nan einem feinen Kalbjus, Salbei und Parmesanchips.\nTAGLIOLINI ALL’ONDA VERDE CHF 29.50\nHandgemachte Bandnudeln an einer Erbsen-Minze Creme mit\nsautierten frischen Calamari, frischer apulischer Burrata und\n«Nero di Seppia»\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 3]\nI SECONDI\nTAGLIATA BLACK ANGUS NELLA NEBBIA CHF 49.50\nTranchiertes Entrecote vom argentinischen Black Angus Rind\nan einem feinen Kalbsjus mit grünem Spargel, Kräuterseitlinge,\ngesalzener Zabaione und knusprige Bramata Sticks.\nFILETTO BLACK ANGUS NELLA NEBBIA CHF 59.50\nFilet vom argentinischen Black Angus Rind an einem feinen\nKalbsjus mit grünem Spargel, Kräuterseitlinge,\ngesalzener Zabaione und knusprige Bramata Sticks.\nCARRÉ D’AGNELLO “ALCHIMIA DI SAPORI” CHF 56.50\nRosa gebratenes Lammkarree an einer feinen Lakritz Sauce,\nmit Kräutern gratinierten Artischocken und einem Kurkuma Kartoffelpüree.\nSPIGOLA IN SINFONIA MEDITERRANEA CHF 49.50\n«Sous vide» gegarte Tranche vom Wolfsbarsch aus Wildfang auf\nErbsencreme mit gerösteten Mandeln, Bergamotte Coulis und\nVenere Reis.\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 4]\nI DESSERT\nIL RICORDO TOSCANO CHF 11.50\nVin Santo mit Cantucci Toscani.\nIL TIRAMISU CLASSICO CHF 12.50\nUnser klassischer Hausgemachter Tiramisu.\nSBRISOLONA ALLA GIANDUIA CON GELATO CHF 12.50\nHausgemachter Mandel Streuselkuchen mit Gianduja Creme\nFüllung und einer Kugel Joghurt Glace.\nCREME BRÛLÉE DELLA PASSIONE CHF 14.50\nCrème Brulée mit Passionsfrucht und Vanille Glacé.\nIL BABBÀLONE AL LIMONCELLO CHF 14.50\nBabà Napoletano mit Limoncello an Waldbeerenragu und weisser\nSchokoladenmousse.\nI DOLCI DELL’OSTERIA, PRO PERSON CHF 16.50\nDessertvariation des Hauses – ab 2 Personen\nI GELATI É SORBETTI DELL’OSTERIA | PRO KUGEL CHF 5.50\nSchokoladeI VanilleI Pistazie\nUnsere Sorbet’s: (Vegan)\nMang- Passionsfrucht I Zitrone\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 5]\nHerkunft unserer Produkte\nRind Argentinien\nKalb Schweiz\nMuscheln Mittelmeer\nFisch Mittelmeer\nOktopus Portugal\nSchwein Schweiz\nEnte Frankreich\nUnsere Partner\nZellweger Comestibles\nBraun - Gemüse\nDieter Meier – Bianchi\nBianchi\nCaratello\nStuder\nNauer\nVinoVario\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 6]\nLE TAVOLATE SAN GALLO\nINSIEME É PIU BELLO!\nAb 4 Personen bieten wir Ihnen an, eine Tavolata wie bei\n«Mamma Bruna» zu erleben.\nAntipasti, diverse Pasta, Secondi und Dessert von unserem\nChefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 98.00\nAntipasti, diverse Pasta und Dessert\nvon unserem Chefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 68.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 7]\nIL VIAGGIO (ab 2 Personen)\nEine Reise durch unsere Karte, eine Reise durch Italien!\n- Amuse Bouche\n- Polipo d’Autore\n- Il Vitello “Anima e Core”\n- Tagliolini all’Onda Verde\n- Intermezzo\n- Filetto Black Angus “Ojo de Agua”\n- Piccoli piaceri del Osteria\nPro Person CHF 119.00\nMit Weinbegleitung\nCHF 169.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+    "text_chunks": [
+      {
+        "id": "24eaa9e2-74b1-451b-9c3d-a91660ee4499",
+        "text": "[Seite 1]\nANTIPASTI\nL’INSALATA DI MISTICANZA CHF 16.50\nVerschiedene frische und knackige saisonale\nBlatt- und Rohkostsalate mit <Pane Carasau> und\nhausgemachtem Dressing.\nLA PARMIGIANA BUFALINA CHF 22.50\nHausgemachter Auberginenauflauf mit San Marzanosauce,\nParmesan, Basilikum und Büffelmozzarella DOP.\nFIOR DI PRIMAVERA CHF 26.50\nKnusprige Zucchiniblüten gefüllt mit Pecorino Romano auf\ngerösteter roter Paprika Creme, grünem Spargel und Limetten-\nJoghurt.\nIL POLIPO D’AUTORE CHF 29.50\nGebratener Oktopus auf einer feinen Saubohnencreme mit\nfrischer Fenchel Julienne, knusprigem Guanciale und einer\nOrangenreduktion.\nIL VITELLO “ANIMA E CORE” CHF 29.50\nKalbsmocken «Sous Vide» in feine Scheiben geschnitten mit\napulischer Burrata gefüllter Artischocke, Kräuter Brotbrösel und\nSüss -Saure rote Zwiebeln.\nTAGLIERI\nI TAGLIERI «L’ANTIPASTO DELL’OSTERIA»\nItalienische Vorspeisen-Plättli mit diversen Salami-, Prosciutto-\nund Käse-Spezialitäten aus eigenem Import.\nPiccolo für 1 Person CHF 24.",
+        "start_pos": 0,
+        "end_pos": 989,
+        "chunk_index": 0
+      },
+      {
+        "id": "1ba010ff-2af7-4e17-8861-8e8967f290ff",
+        "text": "iversen Salami-, Prosciutto-\nund Käse-Spezialitäten aus eigenem Import.\nPiccolo für 1 Person CHF 24.00\nMedio für 2 Personen CHF 39.00\nGrande für 4 Personen CHF 74.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 2]\nI PRIMI\nGNOCCHETTI DI MAMMA BRUNA CHF 25.50/ 27.50\nHausgemachte Kartoffel-Gnocchetti al Ragù della Casa\noder an Tomatensauce mit Basilikum.\nRISOTTO IN ARMONIA CHF 29.50\nCarnaroli Risotto mit Safran, grünem Spargel,\nKräuterseitlinge und Tropfen vom gereiftem\nBalsamico Essig IGP.\nPACCHERI DI GRAGNANO ALLE VONGOLE VERACI CHF 29.50\nRöhrennudeln mit frischen Venusmuscheln, Knoblauch,\nPeperoncino, Cherrytomaten und Petersilie.\nAGNOLOTTI PIEMONTESI CHF 29.50\nHandgemachte, mit Kalb gefüllte, piemontesische Teigtaschen\nan einem feinen Kalbjus, Salbei und Parmesanchips.\nTAGLIOLINI ALL’ONDA VERDE CHF 29.",
+        "start_pos": 889,
+        "end_pos": 1772,
+        "chunk_index": 1
+      },
+      {
+        "id": "f7313870-428f-4f7a-b36a-b372914c4e82",
+        "text": "che Teigtaschen\nan einem feinen Kalbjus, Salbei und Parmesanchips.\nTAGLIOLINI ALL’ONDA VERDE CHF 29.50\nHandgemachte Bandnudeln an einer Erbsen-Minze Creme mit\nsautierten frischen Calamari, frischer apulischer Burrata und\n«Nero di Seppia»\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 3]\nI SECONDI\nTAGLIATA BLACK ANGUS NELLA NEBBIA CHF 49.50\nTranchiertes Entrecote vom argentinischen Black Angus Rind\nan einem feinen Kalbsjus mit grünem Spargel, Kräuterseitlinge,\ngesalzener Zabaione und knusprige Bramata Sticks.\nFILETTO BLACK ANGUS NELLA NEBBIA CHF 59.50\nFilet vom argentinischen Black Angus Rind an einem feinen\nKalbsjus mit grünem Spargel, Kräuterseitlinge,\ngesalzener Zabaione und knusprige Bramata Sticks.\nCARRÉ D’AGNELLO “ALCHIMIA DI SAPORI” CHF 56.50\nRosa gebratenes Lammkarree an einer feinen Lakritz Sauce,\nmit Kräutern gratinierten Artischocken und einem Kurkuma Kartoffelpüree.\nSPIGOLA IN SINFONIA MEDITERRANEA CHF 49.",
+        "start_pos": 1672,
+        "end_pos": 2669,
+        "chunk_index": 2
+      },
+      {
+        "id": "5da1d617-489f-466a-b08f-980cc7045fd3",
+        "text": "gratinierten Artischocken und einem Kurkuma Kartoffelpüree.\nSPIGOLA IN SINFONIA MEDITERRANEA CHF 49.50\n«Sous vide» gegarte Tranche vom Wolfsbarsch aus Wildfang auf\nErbsencreme mit gerösteten Mandeln, Bergamotte Coulis und\nVenere Reis.\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 4]\nI DESSERT\nIL RICORDO TOSCANO CHF 11.50\nVin Santo mit Cantucci Toscani.\nIL TIRAMISU CLASSICO CHF 12.50\nUnser klassischer Hausgemachter Tiramisu.\nSBRISOLONA ALLA GIANDUIA CON GELATO CHF 12.50\nHausgemachter Mandel Streuselkuchen mit Gianduja Creme\nFüllung und einer Kugel Joghurt Glace.\nCREME BRÛLÉE DELLA PASSIONE CHF 14.50\nCrème Brulée mit Passionsfrucht und Vanille Glacé.\nIL BABBÀLONE AL LIMONCELLO CHF 14.50\nBabà Napoletano mit Limoncello an Waldbeerenragu und weisser\nSchokoladenmousse.\nI DOLCI DELL’OSTERIA, PRO PERSON CHF 16.50\nDessertvariation des Hauses – ab 2 Personen\nI GELATI É SORBETTI DELL’OSTERIA | PRO KUGEL CHF 5.",
+        "start_pos": 2569,
+        "end_pos": 3549,
+        "chunk_index": 3
+      },
+      {
+        "id": "d7d6cd91-c89c-4057-b72c-66bca874b918",
+        "text": "6.50\nDessertvariation des Hauses – ab 2 Personen\nI GELATI É SORBETTI DELL’OSTERIA | PRO KUGEL CHF 5.50\nSchokoladeI VanilleI Pistazie\nUnsere Sorbet’s: (Vegan)\nMang- Passionsfrucht I Zitrone\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 5]\nHerkunft unserer Produkte\nRind Argentinien\nKalb Schweiz\nMuscheln Mittelmeer\nFisch Mittelmeer\nOktopus Portugal\nSchwein Schweiz\nEnte Frankreich\nUnsere Partner\nZellweger Comestibles\nBraun - Gemüse\nDieter Meier – Bianchi\nBianchi\nCaratello\nStuder\nNauer\nVinoVario\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 6]\nLE TAVOLATE SAN GALLO\nINSIEME É PIU BELLO!\nAb 4 Personen bieten wir Ihnen an, eine Tavolata wie bei\n«Mamma Bruna» zu erleben.\nAntipasti, diverse Pasta, Secondi und Dessert von unserem\nChefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 98.",
+        "start_pos": 3449,
+        "end_pos": 4411,
+        "chunk_index": 4
+      },
+      {
+        "id": "c1fe9c26-06f1-4b00-a9b1-f8af99552a9a",
+        "text": "em\nChefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 98.00\nAntipasti, diverse Pasta und Dessert\nvon unserem Chefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 68.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 7]\nIL VIAGGIO (ab 2 Personen)\nEine Reise durch unsere Karte, eine Reise durch Italien!\n- Amuse Bouche\n- Polipo d’Autore\n- Il Vitello “Anima e Core”\n- Tagliolini all’Onda Verde\n- Intermezzo\n- Filetto Black Angus “Ojo de Agua”\n- Piccoli piaceri del Osteria\nPro Person CHF 119.00\nMit Weinbegleitung\nCHF 169.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4311,
+        "end_pos": 5089,
+        "chunk_index": 5
+      },
+      {
+        "id": "73a31cc0-d298-4848-832b-9f09a9b54b7b",
+        "text": "Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4989,
+        "end_pos": 5089,
+        "chunk_index": 6
+      },
+      {
+        "id": "8fc5ca08-90d3-4fb7-b2a0-b912bee217d2",
+        "text": "Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4990,
+        "end_pos": 5089,
+        "chunk_index": 7
+      },
+      {
+        "id": "d3ffe926-8ea6-45b9-9f60-0c6bad8c4662",
+        "text": "ervicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4991,
+        "end_pos": 5089,
+        "chunk_index": 8
+      },
+      {
+        "id": "6df24ce1-8cab-48d7-a670-c7414ed6e68a",
+        "text": "rvicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4992,
+        "end_pos": 5089,
+        "chunk_index": 9
+      },
+      {
+        "id": "5b75deeb-8971-4deb-b330-a8f02a7cb6ae",
+        "text": "vicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4993,
+        "end_pos": 5089,
+        "chunk_index": 10
+      },
+      {
+        "id": "56ca2246-95c1-4e0d-b1f7-c95bc8239eb2",
+        "text": "icepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4994,
+        "end_pos": 5089,
+        "chunk_index": 11
+      },
+      {
+        "id": "5cae58ff-8ec8-47e1-8770-4ce88487a880",
+        "text": "cepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4995,
+        "end_pos": 5089,
+        "chunk_index": 12
+      },
+      {
+        "id": "0111a364-07da-4f74-a16f-bccb7cacee90",
+        "text": "epersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4996,
+        "end_pos": 5089,
+        "chunk_index": 13
+      },
+      {
+        "id": "6e5446ef-8d78-4b7d-a05a-2ee60099fd9f",
+        "text": "personal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4997,
+        "end_pos": 5089,
+        "chunk_index": 14
+      },
+      {
+        "id": "2d230f9f-9cd5-46a1-aa53-7005bb5c44a0",
+        "text": "ersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4998,
+        "end_pos": 5089,
+        "chunk_index": 15
+      },
+      {
+        "id": "5911d4a2-6c1b-47d1-bc16-cf1765996118",
+        "text": "rsonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4999,
+        "end_pos": 5089,
+        "chunk_index": 16
+      },
+      {
+        "id": "f40b401f-1851-48f2-9240-05874ad9c65e",
+        "text": "sonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5000,
+        "end_pos": 5089,
+        "chunk_index": 17
+      },
+      {
+        "id": "5081a878-d750-4875-8a55-8b89458a1fa1",
+        "text": "onal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5001,
+        "end_pos": 5089,
+        "chunk_index": 18
+      },
+      {
+        "id": "35533ef9-7acf-4c8e-97f9-48665c1276e3",
+        "text": "nal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5002,
+        "end_pos": 5089,
+        "chunk_index": 19
+      },
+      {
+        "id": "44aa1c38-86d0-4d5b-85a1-614b2e70b07f",
+        "text": "al informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5003,
+        "end_pos": 5089,
+        "chunk_index": 20
+      },
+      {
+        "id": "073762aa-affe-41bd-a3c1-e7966a14902e",
+        "text": "l informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5004,
+        "end_pos": 5089,
+        "chunk_index": 21
+      },
+      {
+        "id": "cac8621c-2d9b-43dc-94b7-36e425707c4b",
+        "text": "informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5005,
+        "end_pos": 5089,
+        "chunk_index": 22
+      },
+      {
+        "id": "5d11c9d9-050a-41f7-9d9b-1573ee426578",
+        "text": "informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5006,
+        "end_pos": 5089,
+        "chunk_index": 23
+      },
+      {
+        "id": "f2c3d06e-8570-4b4f-96ee-afb463864ffc",
+        "text": "nformiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5007,
+        "end_pos": 5089,
+        "chunk_index": 24
+      },
+      {
+        "id": "56f2e7d1-7abf-413a-aab5-e3d9c9eea160",
+        "text": "formiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5008,
+        "end_pos": 5089,
+        "chunk_index": 25
+      },
+      {
+        "id": "2c0549a7-fe5c-4d05-ac41-4e5815634085",
+        "text": "ormiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5009,
+        "end_pos": 5089,
+        "chunk_index": 26
+      },
+      {
+        "id": "731230c4-8b06-41a4-ba86-7ad2ea5d5600",
+        "text": "rmiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5010,
+        "end_pos": 5089,
+        "chunk_index": 27
+      },
+      {
+        "id": "94f5965f-1ff4-4dc1-9694-3501bdcdd678",
+        "text": "miert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5011,
+        "end_pos": 5089,
+        "chunk_index": 28
+      },
+      {
+        "id": "34022a49-29bb-48c8-9b87-baa5b7546815",
+        "text": "iert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5012,
+        "end_pos": 5089,
+        "chunk_index": 29
+      },
+      {
+        "id": "4a83cc42-d476-42c6-92ff-fb921318b6cf",
+        "text": "ert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5013,
+        "end_pos": 5089,
+        "chunk_index": 30
+      },
+      {
+        "id": "c4a17db0-bd96-42b8-8e6b-3c0495f66be9",
+        "text": "rt Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5014,
+        "end_pos": 5089,
+        "chunk_index": 31
+      },
+      {
+        "id": "8716060c-bec7-437b-8b11-0d852f3ed20c",
+        "text": "t Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5015,
+        "end_pos": 5089,
+        "chunk_index": 32
+      },
+      {
+        "id": "3c61bb7c-5493-4608-9cf7-ed8348e2f9e7",
+        "text": "Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5016,
+        "end_pos": 5089,
+        "chunk_index": 33
+      },
+      {
+        "id": "8038f220-0d4d-48cd-963c-5f1f800edc98",
+        "text": "Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5017,
+        "end_pos": 5089,
+        "chunk_index": 34
+      },
+      {
+        "id": "85974a20-9990-4657-95ca-d37d19ed678b",
+        "text": "ie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5018,
+        "end_pos": 5089,
+        "chunk_index": 35
+      },
+      {
+        "id": "b89657c4-d8bf-4714-9e6b-e0500071bfc3",
+        "text": "e über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5019,
+        "end_pos": 5089,
+        "chunk_index": 36
+      },
+      {
+        "id": "085b1b62-1f53-4c10-85d2-6fe14bd3e0d0",
+        "text": "über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5020,
+        "end_pos": 5089,
+        "chunk_index": 37
+      },
+      {
+        "id": "6d6015fd-b74e-4d6c-98ca-8936afebc109",
+        "text": "über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5021,
+        "end_pos": 5089,
+        "chunk_index": 38
+      },
+      {
+        "id": "998ff49e-ec4f-4928-9dda-fcfb8387c1d3",
+        "text": "ber allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5022,
+        "end_pos": 5089,
+        "chunk_index": 39
+      },
+      {
+        "id": "57dd0417-4f21-411d-a8ce-e5fcfcbcdd14",
+        "text": "er allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5023,
+        "end_pos": 5089,
+        "chunk_index": 40
+      },
+      {
+        "id": "c519ef3e-ff35-4772-bccd-453e4c5260d6",
+        "text": "r allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5024,
+        "end_pos": 5089,
+        "chunk_index": 41
+      },
+      {
+        "id": "5ed9734a-52d6-4a1f-b084-e92316dab50c",
+        "text": "allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5025,
+        "end_pos": 5089,
+        "chunk_index": 42
+      },
+      {
+        "id": "10db5878-1959-4034-9575-81ceb2a94660",
+        "text": "allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5026,
+        "end_pos": 5089,
+        "chunk_index": 43
+      },
+      {
+        "id": "ae423172-b7bc-4179-af4d-a689d05e5616",
+        "text": "llergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5027,
+        "end_pos": 5089,
+        "chunk_index": 44
+      },
+      {
+        "id": "7bbe4fe6-f901-4010-bb9b-9f0862ec6e37",
+        "text": "lergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5028,
+        "end_pos": 5089,
+        "chunk_index": 45
+      },
+      {
+        "id": "c21ab1e5-3ae7-4acb-8e4c-41351481830e",
+        "text": "ergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5029,
+        "end_pos": 5089,
+        "chunk_index": 46
+      },
+      {
+        "id": "2f0f3e3d-d5ac-44ec-b3b1-623b513616ed",
+        "text": "rgene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5030,
+        "end_pos": 5089,
+        "chunk_index": 47
+      },
+      {
+        "id": "e347a0cd-1ee8-446a-8c75-0a4662361b55",
+        "text": "gene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5031,
+        "end_pos": 5089,
+        "chunk_index": 48
+      },
+      {
+        "id": "94bdac59-043b-4505-ac42-047c0701d28f",
+        "text": "ene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5032,
+        "end_pos": 5089,
+        "chunk_index": 49
+      },
+      {
+        "id": "de129487-725c-4c52-be95-d55ee53fa695",
+        "text": "ne Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5033,
+        "end_pos": 5089,
+        "chunk_index": 50
+      },
+      {
+        "id": "e9a91605-2175-4334-b85a-b9539e1e5194",
+        "text": "e Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5034,
+        "end_pos": 5089,
+        "chunk_index": 51
+      },
+      {
+        "id": "5a2501f8-c2a6-4b4e-b90a-e848ee2cc95e",
+        "text": "Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5035,
+        "end_pos": 5089,
+        "chunk_index": 52
+      },
+      {
+        "id": "64add81e-a4c8-4382-ab7b-f85495ffa802",
+        "text": "Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5036,
+        "end_pos": 5089,
+        "chunk_index": 53
+      },
+      {
+        "id": "3e6c6813-ab42-4026-ad78-c1752645a81f",
+        "text": "utaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5037,
+        "end_pos": 5089,
+        "chunk_index": 54
+      },
+      {
+        "id": "ee96442a-55f6-4660-8849-0dab09704041",
+        "text": "taten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5038,
+        "end_pos": 5089,
+        "chunk_index": 55
+      },
+      {
+        "id": "e668587a-b39a-439c-99ca-76b09cb7a613",
+        "text": "aten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5039,
+        "end_pos": 5089,
+        "chunk_index": 56
+      },
+      {
+        "id": "9a48c912-7641-4463-abb2-ae0626277495",
+        "text": "ten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5040,
+        "end_pos": 5089,
+        "chunk_index": 57
+      },
+      {
+        "id": "558fbf55-6d2f-46ba-84a1-2b782174eeee",
+        "text": "en in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5041,
+        "end_pos": 5089,
+        "chunk_index": 58
+      },
+      {
+        "id": "24b381c3-fd46-4f75-a21d-abf6b53e069f",
+        "text": "n in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5042,
+        "end_pos": 5089,
+        "chunk_index": 59
+      },
+      {
+        "id": "dcf12bae-3611-4e61-8b0f-8e687fbd2b56",
+        "text": "in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5043,
+        "end_pos": 5089,
+        "chunk_index": 60
+      },
+      {
+        "id": "ce901abc-831d-4ff2-9a60-24b8ff16e5a3",
+        "text": "in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5044,
+        "end_pos": 5089,
+        "chunk_index": 61
+      },
+      {
+        "id": "71aa931f-321b-477e-ab75-e5766bad40c1",
+        "text": "n unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5045,
+        "end_pos": 5089,
+        "chunk_index": 62
+      },
+      {
+        "id": "a462bc9a-0586-4679-8ff6-7cbcd27ccaaf",
+        "text": "unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5046,
+        "end_pos": 5089,
+        "chunk_index": 63
+      },
+      {
+        "id": "b9eba369-adfb-4515-a1f3-685e9278c899",
+        "text": "unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5047,
+        "end_pos": 5089,
+        "chunk_index": 64
+      },
+      {
+        "id": "2344f879-1431-4c7a-a011-680cb5fbea0e",
+        "text": "nseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5048,
+        "end_pos": 5089,
+        "chunk_index": 65
+      },
+      {
+        "id": "cc669fd6-cda1-408c-af6e-f3672faebdc2",
+        "text": "seren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5049,
+        "end_pos": 5089,
+        "chunk_index": 66
+      },
+      {
+        "id": "24283f31-587c-4932-991a-efbc88e3eebd",
+        "text": "eren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5050,
+        "end_pos": 5089,
+        "chunk_index": 67
+      },
+      {
+        "id": "41dafe4e-3f8a-4442-b7eb-8cc0ac4aca64",
+        "text": "ren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5051,
+        "end_pos": 5089,
+        "chunk_index": 68
+      },
+      {
+        "id": "19d5adba-9f7a-4212-ac91-67b0d2481e48",
+        "text": "en Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5052,
+        "end_pos": 5089,
+        "chunk_index": 69
+      },
+      {
+        "id": "d80068cc-b5ed-448b-a67c-f7c3bba0df74",
+        "text": "n Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5053,
+        "end_pos": 5089,
+        "chunk_index": 70
+      },
+      {
+        "id": "9ea78bb2-4f62-491d-a201-0803c12cbfab",
+        "text": "Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5054,
+        "end_pos": 5089,
+        "chunk_index": 71
+      },
+      {
+        "id": "e01f5d0b-309e-4a1b-8ed8-f1ba1436f939",
+        "text": "Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5055,
+        "end_pos": 5089,
+        "chunk_index": 72
+      },
+      {
+        "id": "c10c438d-da11-4637-94fc-6c3e05fe6641",
+        "text": "erichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5056,
+        "end_pos": 5089,
+        "chunk_index": 73
+      },
+      {
+        "id": "e4edd4a5-9c22-4225-86cd-7a53b34c4daa",
+        "text": "richten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5057,
+        "end_pos": 5089,
+        "chunk_index": 74
+      },
+      {
+        "id": "65833484-2725-4a70-955c-9ac9805b235a",
+        "text": "ichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5058,
+        "end_pos": 5089,
+        "chunk_index": 75
+      },
+      {
+        "id": "d7d1ced7-6e10-48cb-9aad-c82c243f20e9",
+        "text": "chten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5059,
+        "end_pos": 5089,
+        "chunk_index": 76
+      },
+      {
+        "id": "fc05fdd5-8158-4ed7-a669-bcb8523ca968",
+        "text": "hten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5060,
+        "end_pos": 5089,
+        "chunk_index": 77
+      },
+      {
+        "id": "384c6624-3545-460a-b0eb-eaf0205ddf7f",
+        "text": "ten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5061,
+        "end_pos": 5089,
+        "chunk_index": 78
+      },
+      {
+        "id": "1f2ebdcb-bec8-4f1b-82ab-de136f11082a",
+        "text": "en.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5062,
+        "end_pos": 5089,
+        "chunk_index": 79
+      },
+      {
+        "id": "c59e4127-304d-44f4-83a0-1bff2a1fc238",
+        "text": "n.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5063,
+        "end_pos": 5089,
+        "chunk_index": 80
+      },
+      {
+        "id": "c7639ab5-d674-49c0-af49-5c5dc4a7587e",
+        "text": ".\nAlle Preise inkl. Mwst.",
+        "start_pos": 5064,
+        "end_pos": 5089,
+        "chunk_index": 81
+      },
+      {
+        "id": "4b277c13-4a94-4d7f-8d79-366fcc035a05",
+        "text": "Alle Preise inkl. Mwst.",
+        "start_pos": 5065,
+        "end_pos": 5089,
+        "chunk_index": 82
+      },
+      {
+        "id": "6b5b18a9-1bc9-4ab9-895c-59d9dbdde1f9",
+        "text": "Alle Preise inkl. Mwst.",
+        "start_pos": 5066,
+        "end_pos": 5089,
+        "chunk_index": 83
+      },
+      {
+        "id": "cf15512a-050b-4b3a-8186-4db2c76733a8",
+        "text": "lle Preise inkl. Mwst.",
+        "start_pos": 5067,
+        "end_pos": 5089,
+        "chunk_index": 84
+      },
+      {
+        "id": "9c0af919-43da-47b0-a603-2c2c0fcbba9d",
+        "text": "le Preise inkl. Mwst.",
+        "start_pos": 5068,
+        "end_pos": 5089,
+        "chunk_index": 85
+      },
+      {
+        "id": "66ded075-7985-4a21-ade9-66da788858e0",
+        "text": "e Preise inkl. Mwst.",
+        "start_pos": 5069,
+        "end_pos": 5089,
+        "chunk_index": 86
+      },
+      {
+        "id": "f1b6a3ed-8134-48ce-a07a-4608e1d2115e",
+        "text": "Preise inkl. Mwst.",
+        "start_pos": 5070,
+        "end_pos": 5089,
+        "chunk_index": 87
+      },
+      {
+        "id": "ffa14a4f-0f2b-4b0a-8ec4-d37118bfa9f3",
+        "text": "Preise inkl. Mwst.",
+        "start_pos": 5071,
+        "end_pos": 5089,
+        "chunk_index": 88
+      },
+      {
+        "id": "728ef217-8a3d-470d-bc4f-57c53a2c1e07",
+        "text": "reise inkl. Mwst.",
+        "start_pos": 5072,
+        "end_pos": 5089,
+        "chunk_index": 89
+      },
+      {
+        "id": "de4df041-7976-4fae-9718-6808af1029c5",
+        "text": "eise inkl. Mwst.",
+        "start_pos": 5073,
+        "end_pos": 5089,
+        "chunk_index": 90
+      },
+      {
+        "id": "9e1b7e9f-696e-4eb6-9982-313b0f3f1987",
+        "text": "ise inkl. Mwst.",
+        "start_pos": 5074,
+        "end_pos": 5089,
+        "chunk_index": 91
+      },
+      {
+        "id": "351f29a8-e024-438e-ab46-406078341036",
+        "text": "se inkl. Mwst.",
+        "start_pos": 5075,
+        "end_pos": 5089,
+        "chunk_index": 92
+      },
+      {
+        "id": "7091db6c-5872-4347-b852-9d75dbfff588",
+        "text": "e inkl. Mwst.",
+        "start_pos": 5076,
+        "end_pos": 5089,
+        "chunk_index": 93
+      },
+      {
+        "id": "1a76edce-6073-4eed-a0c8-c3fa1cf15acb",
+        "text": "inkl. Mwst.",
+        "start_pos": 5077,
+        "end_pos": 5089,
+        "chunk_index": 94
+      },
+      {
+        "id": "5cde2a70-f535-4be8-996a-5ca40abe0df8",
+        "text": "inkl. Mwst.",
+        "start_pos": 5078,
+        "end_pos": 5089,
+        "chunk_index": 95
+      },
+      {
+        "id": "b7812958-ce41-4425-a2eb-dfc23360b6d3",
+        "text": "nkl. Mwst.",
+        "start_pos": 5079,
+        "end_pos": 5089,
+        "chunk_index": 96
+      },
+      {
+        "id": "2a2d33cd-7746-437c-b7b8-b5a452379959",
+        "text": "kl. Mwst.",
+        "start_pos": 5080,
+        "end_pos": 5089,
+        "chunk_index": 97
+      },
+      {
+        "id": "40cb3f6e-d057-4623-8283-0787d08b38d8",
+        "text": "l. Mwst.",
+        "start_pos": 5081,
+        "end_pos": 5089,
+        "chunk_index": 98
+      },
+      {
+        "id": "391abb5f-e61d-49ae-864c-f7243595d774",
+        "text": ". Mwst.",
+        "start_pos": 5082,
+        "end_pos": 5089,
+        "chunk_index": 99
+      },
+      {
+        "id": "b0ef0aae-fab3-4870-bf28-fa22b42d7083",
+        "text": "Mwst.",
+        "start_pos": 5083,
+        "end_pos": 5089,
+        "chunk_index": 100
+      },
+      {
+        "id": "4ec7d6ea-0dbf-4126-89bf-eb5bdffac4f5",
+        "text": "Mwst.",
+        "start_pos": 5084,
+        "end_pos": 5089,
+        "chunk_index": 101
+      },
+      {
+        "id": "b6002bd3-d6e3-465d-9fd1-d37242d4cc33",
+        "text": "wst.",
+        "start_pos": 5085,
+        "end_pos": 5089,
+        "chunk_index": 102
+      },
+      {
+        "id": "62700d38-41b0-494e-96d9-02b1a199cdf1",
+        "text": "st.",
+        "start_pos": 5086,
+        "end_pos": 5089,
+        "chunk_index": 103
+      },
+      {
+        "id": "e2dad608-e84f-4c26-a5ae-0ff91a420e7a",
+        "text": "t.",
+        "start_pos": 5087,
+        "end_pos": 5089,
+        "chunk_index": 104
+      },
+      {
+        "id": "e01f284d-149a-4918-8d58-bbe4045605ce",
+        "text": ".",
+        "start_pos": 5088,
+        "end_pos": 5089,
+        "chunk_index": 105
+      }
+    ],
+    "text_metadata": {
+      "word_count": 700,
+      "char_count": 5089,
+      "chunk_count": 106,
+      "extraction_method": "pdf",
+      "processed_at": "2025-07-10T17:51:14.078290"
+    },
+    "processing_error": null,
+    "processed_at": "2025-07-10T17:51:14.078290"
+  },
+  "095fdd4f-89f6-4145-b539-4217cd90fd19": {
+    "id": "095fdd4f-89f6-4145-b539-4217cd90fd19",
+    "filename": "Abendkarte_210325.pdf",
+    "safe_filename": "095fdd4f-89f6-4145-b539-4217cd90fd19_Abendkarte_210325.pdf",
+    "file_path": "uploads\\095fdd4f-89f6-4145-b539-4217cd90fd19_Abendkarte_210325.pdf",
+    "file_type": "pdf",
+    "file_size": 106622,
+    "uploaded_at": "2025-07-10T17:53:02.488302",
+    "processing_status": "completed",
+    "project_ids": [
+      "b430a1e8-acc4-4a02-8bfd-0a4e0e4f0fb6"
+    ],
+    "tags": [],
+    "content_preview": null,
+    "extracted_text": "[Seite 1]\nANTIPASTI\nL’INSALATA DI MISTICANZA CHF 16.50\nVerschiedene frische und knackige saisonale\nBlatt- und Rohkostsalate mit <Pane Carasau> und\nhausgemachtem Dressing.\nLA PARMIGIANA BUFALINA CHF 22.50\nHausgemachter Auberginenauflauf mit San Marzanosauce,\nParmesan, Basilikum und Büffelmozzarella DOP.\nFIOR DI PRIMAVERA CHF 26.50\nKnusprige Zucchiniblüten gefüllt mit Pecorino Romano auf\ngerösteter roter Paprika Creme, grünem Spargel und Limetten-\nJoghurt.\nIL POLIPO D’AUTORE CHF 29.50\nGebratener Oktopus auf einer feinen Saubohnencreme mit\nfrischer Fenchel Julienne, knusprigem Guanciale und einer\nOrangenreduktion.\nIL VITELLO “ANIMA E CORE” CHF 29.50\nKalbsmocken «Sous Vide» in feine Scheiben geschnitten mit\napulischer Burrata gefüllter Artischocke, Kräuter Brotbrösel und\nSüss -Saure rote Zwiebeln.\nTAGLIERI\nI TAGLIERI «L’ANTIPASTO DELL’OSTERIA»\nItalienische Vorspeisen-Plättli mit diversen Salami-, Prosciutto-\nund Käse-Spezialitäten aus eigenem Import.\nPiccolo für 1 Person CHF 24.00\nMedio für 2 Personen CHF 39.00\nGrande für 4 Personen CHF 74.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 2]\nI PRIMI\nGNOCCHETTI DI MAMMA BRUNA CHF 25.50/ 27.50\nHausgemachte Kartoffel-Gnocchetti al Ragù della Casa\noder an Tomatensauce mit Basilikum.\nRISOTTO IN ARMONIA CHF 29.50\nCarnaroli Risotto mit Safran, grünem Spargel,\nKräuterseitlinge und Tropfen vom gereiftem\nBalsamico Essig IGP.\nPACCHERI DI GRAGNANO ALLE VONGOLE VERACI CHF 29.50\nRöhrennudeln mit frischen Venusmuscheln, Knoblauch,\nPeperoncino, Cherrytomaten und Petersilie.\nAGNOLOTTI PIEMONTESI CHF 29.50\nHandgemachte, mit Kalb gefüllte, piemontesische Teigtaschen\nan einem feinen Kalbjus, Salbei und Parmesanchips.\nTAGLIOLINI ALL’ONDA VERDE CHF 29.50\nHandgemachte Bandnudeln an einer Erbsen-Minze Creme mit\nsautierten frischen Calamari, frischer apulischer Burrata und\n«Nero di Seppia»\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 3]\nI SECONDI\nTAGLIATA BLACK ANGUS NELLA NEBBIA CHF 49.50\nTranchiertes Entrecote vom argentinischen Black Angus Rind\nan einem feinen Kalbsjus mit grünem Spargel, Kräuterseitlinge,\ngesalzener Zabaione und knusprige Bramata Sticks.\nFILETTO BLACK ANGUS NELLA NEBBIA CHF 59.50\nFilet vom argentinischen Black Angus Rind an einem feinen\nKalbsjus mit grünem Spargel, Kräuterseitlinge,\ngesalzener Zabaione und knusprige Bramata Sticks.\nCARRÉ D’AGNELLO “ALCHIMIA DI SAPORI” CHF 56.50\nRosa gebratenes Lammkarree an einer feinen Lakritz Sauce,\nmit Kräutern gratinierten Artischocken und einem Kurkuma Kartoffelpüree.\nSPIGOLA IN SINFONIA MEDITERRANEA CHF 49.50\n«Sous vide» gegarte Tranche vom Wolfsbarsch aus Wildfang auf\nErbsencreme mit gerösteten Mandeln, Bergamotte Coulis und\nVenere Reis.\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 4]\nI DESSERT\nIL RICORDO TOSCANO CHF 11.50\nVin Santo mit Cantucci Toscani.\nIL TIRAMISU CLASSICO CHF 12.50\nUnser klassischer Hausgemachter Tiramisu.\nSBRISOLONA ALLA GIANDUIA CON GELATO CHF 12.50\nHausgemachter Mandel Streuselkuchen mit Gianduja Creme\nFüllung und einer Kugel Joghurt Glace.\nCREME BRÛLÉE DELLA PASSIONE CHF 14.50\nCrème Brulée mit Passionsfrucht und Vanille Glacé.\nIL BABBÀLONE AL LIMONCELLO CHF 14.50\nBabà Napoletano mit Limoncello an Waldbeerenragu und weisser\nSchokoladenmousse.\nI DOLCI DELL’OSTERIA, PRO PERSON CHF 16.50\nDessertvariation des Hauses – ab 2 Personen\nI GELATI É SORBETTI DELL’OSTERIA | PRO KUGEL CHF 5.50\nSchokoladeI VanilleI Pistazie\nUnsere Sorbet’s: (Vegan)\nMang- Passionsfrucht I Zitrone\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 5]\nHerkunft unserer Produkte\nRind Argentinien\nKalb Schweiz\nMuscheln Mittelmeer\nFisch Mittelmeer\nOktopus Portugal\nSchwein Schweiz\nEnte Frankreich\nUnsere Partner\nZellweger Comestibles\nBraun - Gemüse\nDieter Meier – Bianchi\nBianchi\nCaratello\nStuder\nNauer\nVinoVario\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 6]\nLE TAVOLATE SAN GALLO\nINSIEME É PIU BELLO!\nAb 4 Personen bieten wir Ihnen an, eine Tavolata wie bei\n«Mamma Bruna» zu erleben.\nAntipasti, diverse Pasta, Secondi und Dessert von unserem\nChefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 98.00\nAntipasti, diverse Pasta und Dessert\nvon unserem Chefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 68.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 7]\nIL VIAGGIO (ab 2 Personen)\nEine Reise durch unsere Karte, eine Reise durch Italien!\n- Amuse Bouche\n- Polipo d’Autore\n- Il Vitello “Anima e Core”\n- Tagliolini all’Onda Verde\n- Intermezzo\n- Filetto Black Angus “Ojo de Agua”\n- Piccoli piaceri del Osteria\nPro Person CHF 119.00\nMit Weinbegleitung\nCHF 169.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+    "text_chunks": [
+      {
+        "id": "ba9d9422-9953-491e-909c-928aed0e2f0d",
+        "text": "[Seite 1]\nANTIPASTI\nL’INSALATA DI MISTICANZA CHF 16.50\nVerschiedene frische und knackige saisonale\nBlatt- und Rohkostsalate mit <Pane Carasau> und\nhausgemachtem Dressing.\nLA PARMIGIANA BUFALINA CHF 22.50\nHausgemachter Auberginenauflauf mit San Marzanosauce,\nParmesan, Basilikum und Büffelmozzarella DOP.\nFIOR DI PRIMAVERA CHF 26.50\nKnusprige Zucchiniblüten gefüllt mit Pecorino Romano auf\ngerösteter roter Paprika Creme, grünem Spargel und Limetten-\nJoghurt.\nIL POLIPO D’AUTORE CHF 29.50\nGebratener Oktopus auf einer feinen Saubohnencreme mit\nfrischer Fenchel Julienne, knusprigem Guanciale und einer\nOrangenreduktion.\nIL VITELLO “ANIMA E CORE” CHF 29.50\nKalbsmocken «Sous Vide» in feine Scheiben geschnitten mit\napulischer Burrata gefüllter Artischocke, Kräuter Brotbrösel und\nSüss -Saure rote Zwiebeln.\nTAGLIERI\nI TAGLIERI «L’ANTIPASTO DELL’OSTERIA»\nItalienische Vorspeisen-Plättli mit diversen Salami-, Prosciutto-\nund Käse-Spezialitäten aus eigenem Import.\nPiccolo für 1 Person CHF 24.",
+        "start_pos": 0,
+        "end_pos": 989,
+        "chunk_index": 0
+      },
+      {
+        "id": "41c4ecb2-ee41-48b2-8249-f4d5ecf9032c",
+        "text": "iversen Salami-, Prosciutto-\nund Käse-Spezialitäten aus eigenem Import.\nPiccolo für 1 Person CHF 24.00\nMedio für 2 Personen CHF 39.00\nGrande für 4 Personen CHF 74.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 2]\nI PRIMI\nGNOCCHETTI DI MAMMA BRUNA CHF 25.50/ 27.50\nHausgemachte Kartoffel-Gnocchetti al Ragù della Casa\noder an Tomatensauce mit Basilikum.\nRISOTTO IN ARMONIA CHF 29.50\nCarnaroli Risotto mit Safran, grünem Spargel,\nKräuterseitlinge und Tropfen vom gereiftem\nBalsamico Essig IGP.\nPACCHERI DI GRAGNANO ALLE VONGOLE VERACI CHF 29.50\nRöhrennudeln mit frischen Venusmuscheln, Knoblauch,\nPeperoncino, Cherrytomaten und Petersilie.\nAGNOLOTTI PIEMONTESI CHF 29.50\nHandgemachte, mit Kalb gefüllte, piemontesische Teigtaschen\nan einem feinen Kalbjus, Salbei und Parmesanchips.\nTAGLIOLINI ALL’ONDA VERDE CHF 29.",
+        "start_pos": 889,
+        "end_pos": 1772,
+        "chunk_index": 1
+      },
+      {
+        "id": "ba5c4504-c031-43a1-a3aa-9abf1c8db6ab",
+        "text": "che Teigtaschen\nan einem feinen Kalbjus, Salbei und Parmesanchips.\nTAGLIOLINI ALL’ONDA VERDE CHF 29.50\nHandgemachte Bandnudeln an einer Erbsen-Minze Creme mit\nsautierten frischen Calamari, frischer apulischer Burrata und\n«Nero di Seppia»\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 3]\nI SECONDI\nTAGLIATA BLACK ANGUS NELLA NEBBIA CHF 49.50\nTranchiertes Entrecote vom argentinischen Black Angus Rind\nan einem feinen Kalbsjus mit grünem Spargel, Kräuterseitlinge,\ngesalzener Zabaione und knusprige Bramata Sticks.\nFILETTO BLACK ANGUS NELLA NEBBIA CHF 59.50\nFilet vom argentinischen Black Angus Rind an einem feinen\nKalbsjus mit grünem Spargel, Kräuterseitlinge,\ngesalzener Zabaione und knusprige Bramata Sticks.\nCARRÉ D’AGNELLO “ALCHIMIA DI SAPORI” CHF 56.50\nRosa gebratenes Lammkarree an einer feinen Lakritz Sauce,\nmit Kräutern gratinierten Artischocken und einem Kurkuma Kartoffelpüree.\nSPIGOLA IN SINFONIA MEDITERRANEA CHF 49.",
+        "start_pos": 1672,
+        "end_pos": 2669,
+        "chunk_index": 2
+      },
+      {
+        "id": "7c7afea6-60bf-4ee2-b809-e31eae3204e9",
+        "text": "gratinierten Artischocken und einem Kurkuma Kartoffelpüree.\nSPIGOLA IN SINFONIA MEDITERRANEA CHF 49.50\n«Sous vide» gegarte Tranche vom Wolfsbarsch aus Wildfang auf\nErbsencreme mit gerösteten Mandeln, Bergamotte Coulis und\nVenere Reis.\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 4]\nI DESSERT\nIL RICORDO TOSCANO CHF 11.50\nVin Santo mit Cantucci Toscani.\nIL TIRAMISU CLASSICO CHF 12.50\nUnser klassischer Hausgemachter Tiramisu.\nSBRISOLONA ALLA GIANDUIA CON GELATO CHF 12.50\nHausgemachter Mandel Streuselkuchen mit Gianduja Creme\nFüllung und einer Kugel Joghurt Glace.\nCREME BRÛLÉE DELLA PASSIONE CHF 14.50\nCrème Brulée mit Passionsfrucht und Vanille Glacé.\nIL BABBÀLONE AL LIMONCELLO CHF 14.50\nBabà Napoletano mit Limoncello an Waldbeerenragu und weisser\nSchokoladenmousse.\nI DOLCI DELL’OSTERIA, PRO PERSON CHF 16.50\nDessertvariation des Hauses – ab 2 Personen\nI GELATI É SORBETTI DELL’OSTERIA | PRO KUGEL CHF 5.",
+        "start_pos": 2569,
+        "end_pos": 3549,
+        "chunk_index": 3
+      },
+      {
+        "id": "08e84cf9-1ddb-4d02-a0a3-ef834650485e",
+        "text": "6.50\nDessertvariation des Hauses – ab 2 Personen\nI GELATI É SORBETTI DELL’OSTERIA | PRO KUGEL CHF 5.50\nSchokoladeI VanilleI Pistazie\nUnsere Sorbet’s: (Vegan)\nMang- Passionsfrucht I Zitrone\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 5]\nHerkunft unserer Produkte\nRind Argentinien\nKalb Schweiz\nMuscheln Mittelmeer\nFisch Mittelmeer\nOktopus Portugal\nSchwein Schweiz\nEnte Frankreich\nUnsere Partner\nZellweger Comestibles\nBraun - Gemüse\nDieter Meier – Bianchi\nBianchi\nCaratello\nStuder\nNauer\nVinoVario\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 6]\nLE TAVOLATE SAN GALLO\nINSIEME É PIU BELLO!\nAb 4 Personen bieten wir Ihnen an, eine Tavolata wie bei\n«Mamma Bruna» zu erleben.\nAntipasti, diverse Pasta, Secondi und Dessert von unserem\nChefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 98.",
+        "start_pos": 3449,
+        "end_pos": 4411,
+        "chunk_index": 4
+      },
+      {
+        "id": "ffae4baf-dc60-497d-8520-14a1b0eecd3e",
+        "text": "em\nChefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 98.00\nAntipasti, diverse Pasta und Dessert\nvon unserem Chefkoch Luciano frisch zubereitet.\nLassen sie sich überraschen und verwöhnen!\nPro Person CHF 68.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.\n\n[Seite 7]\nIL VIAGGIO (ab 2 Personen)\nEine Reise durch unsere Karte, eine Reise durch Italien!\n- Amuse Bouche\n- Polipo d’Autore\n- Il Vitello “Anima e Core”\n- Tagliolini all’Onda Verde\n- Intermezzo\n- Filetto Black Angus “Ojo de Agua”\n- Piccoli piaceri del Osteria\nPro Person CHF 119.00\nMit Weinbegleitung\nCHF 169.00\nUnser Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4311,
+        "end_pos": 5089,
+        "chunk_index": 5
+      },
+      {
+        "id": "58b2f088-5ff1-4656-b2f3-f564dae27de1",
+        "text": "Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4989,
+        "end_pos": 5089,
+        "chunk_index": 6
+      },
+      {
+        "id": "b59db109-b7b2-4af1-a65d-3e2ea6f5c19f",
+        "text": "Servicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4990,
+        "end_pos": 5089,
+        "chunk_index": 7
+      },
+      {
+        "id": "899c2754-0739-4324-b7d1-441af4f64316",
+        "text": "ervicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4991,
+        "end_pos": 5089,
+        "chunk_index": 8
+      },
+      {
+        "id": "57e86e38-f97a-4aee-abdb-bba17eb35383",
+        "text": "rvicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4992,
+        "end_pos": 5089,
+        "chunk_index": 9
+      },
+      {
+        "id": "0d083750-878d-4aa5-9943-0a147e589c49",
+        "text": "vicepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4993,
+        "end_pos": 5089,
+        "chunk_index": 10
+      },
+      {
+        "id": "cf61bf0e-b106-41e5-a8f9-88ab4ca50685",
+        "text": "icepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4994,
+        "end_pos": 5089,
+        "chunk_index": 11
+      },
+      {
+        "id": "90fb0711-3a38-43d2-aedc-6916bd32f20e",
+        "text": "cepersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4995,
+        "end_pos": 5089,
+        "chunk_index": 12
+      },
+      {
+        "id": "a7a3e27e-e77e-40a3-9ba9-fbbf2325f697",
+        "text": "epersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4996,
+        "end_pos": 5089,
+        "chunk_index": 13
+      },
+      {
+        "id": "c1c026d1-8dd9-4c92-9f16-2794a12e5afc",
+        "text": "personal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4997,
+        "end_pos": 5089,
+        "chunk_index": 14
+      },
+      {
+        "id": "83a05d28-e3e1-4538-9f16-82ad8870d489",
+        "text": "ersonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4998,
+        "end_pos": 5089,
+        "chunk_index": 15
+      },
+      {
+        "id": "9bf47048-206a-4b59-842e-dd0fee2d422f",
+        "text": "rsonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 4999,
+        "end_pos": 5089,
+        "chunk_index": 16
+      },
+      {
+        "id": "ae95b676-8441-4b34-83eb-4d2244886e02",
+        "text": "sonal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5000,
+        "end_pos": 5089,
+        "chunk_index": 17
+      },
+      {
+        "id": "a0cf622f-36eb-44e0-9e48-9e781004026a",
+        "text": "onal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5001,
+        "end_pos": 5089,
+        "chunk_index": 18
+      },
+      {
+        "id": "1458aa85-8caa-470d-a4d6-d88ed959da7d",
+        "text": "nal informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5002,
+        "end_pos": 5089,
+        "chunk_index": 19
+      },
+      {
+        "id": "d292a18f-a8b4-4a20-8d49-691ba7ec0e3d",
+        "text": "al informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5003,
+        "end_pos": 5089,
+        "chunk_index": 20
+      },
+      {
+        "id": "4f6f748c-669d-44ab-9974-cbba7c311d7a",
+        "text": "l informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5004,
+        "end_pos": 5089,
+        "chunk_index": 21
+      },
+      {
+        "id": "144628bc-9508-4664-98e6-ab7350a78da4",
+        "text": "informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5005,
+        "end_pos": 5089,
+        "chunk_index": 22
+      },
+      {
+        "id": "65bdaeec-42a3-4032-9a02-21d173c7af8b",
+        "text": "informiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5006,
+        "end_pos": 5089,
+        "chunk_index": 23
+      },
+      {
+        "id": "0c995c9c-8d84-4299-8122-8f1e3adacf23",
+        "text": "nformiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5007,
+        "end_pos": 5089,
+        "chunk_index": 24
+      },
+      {
+        "id": "7f772067-2d35-450b-821d-4d3142a237e7",
+        "text": "formiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5008,
+        "end_pos": 5089,
+        "chunk_index": 25
+      },
+      {
+        "id": "2f01ea89-bc3d-4340-941e-ed71c84ac802",
+        "text": "ormiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5009,
+        "end_pos": 5089,
+        "chunk_index": 26
+      },
+      {
+        "id": "d6405656-4b2c-4a90-a83f-1c5a47ecc725",
+        "text": "rmiert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5010,
+        "end_pos": 5089,
+        "chunk_index": 27
+      },
+      {
+        "id": "d672f8f7-edfa-496c-9706-68b3226c50a7",
+        "text": "miert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5011,
+        "end_pos": 5089,
+        "chunk_index": 28
+      },
+      {
+        "id": "e3452392-e236-4d99-8f84-8a32d937b08e",
+        "text": "iert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5012,
+        "end_pos": 5089,
+        "chunk_index": 29
+      },
+      {
+        "id": "35a21214-8f4b-4ef7-a631-bdf4bf515321",
+        "text": "ert Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5013,
+        "end_pos": 5089,
+        "chunk_index": 30
+      },
+      {
+        "id": "925179bb-8c57-41a1-87b3-272624c769d9",
+        "text": "rt Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5014,
+        "end_pos": 5089,
+        "chunk_index": 31
+      },
+      {
+        "id": "472bff78-ac72-44ba-8ce6-663b9e078f49",
+        "text": "t Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5015,
+        "end_pos": 5089,
+        "chunk_index": 32
+      },
+      {
+        "id": "5cf21746-5231-4b0d-b1eb-5e456242476a",
+        "text": "Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5016,
+        "end_pos": 5089,
+        "chunk_index": 33
+      },
+      {
+        "id": "ef0de519-d8d5-42b2-b3ed-c49ae9f7f2e3",
+        "text": "Sie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5017,
+        "end_pos": 5089,
+        "chunk_index": 34
+      },
+      {
+        "id": "3f23a2f8-60c4-44df-a3a7-c5f2128f5499",
+        "text": "ie über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5018,
+        "end_pos": 5089,
+        "chunk_index": 35
+      },
+      {
+        "id": "92d486e5-6ba2-474b-9d69-5a495fb13fc0",
+        "text": "e über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5019,
+        "end_pos": 5089,
+        "chunk_index": 36
+      },
+      {
+        "id": "e514ab59-cea4-468f-8150-2da8c41ecfe0",
+        "text": "über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5020,
+        "end_pos": 5089,
+        "chunk_index": 37
+      },
+      {
+        "id": "26958639-a3d4-4113-a3a3-801cff0b6a59",
+        "text": "über allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5021,
+        "end_pos": 5089,
+        "chunk_index": 38
+      },
+      {
+        "id": "de6b9825-b7a0-4988-b156-884004194269",
+        "text": "ber allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5022,
+        "end_pos": 5089,
+        "chunk_index": 39
+      },
+      {
+        "id": "cbe0932f-15a0-4096-b713-fadf3fb7e671",
+        "text": "er allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5023,
+        "end_pos": 5089,
+        "chunk_index": 40
+      },
+      {
+        "id": "fb56c821-6a61-4ca6-99c5-9accfafa4f6f",
+        "text": "r allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5024,
+        "end_pos": 5089,
+        "chunk_index": 41
+      },
+      {
+        "id": "42afd41d-eae9-44d0-bdd0-e73579c97a0a",
+        "text": "allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5025,
+        "end_pos": 5089,
+        "chunk_index": 42
+      },
+      {
+        "id": "c18f4218-1f80-43fa-ba83-e10a1f911afc",
+        "text": "allergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5026,
+        "end_pos": 5089,
+        "chunk_index": 43
+      },
+      {
+        "id": "412bc2bb-5b6b-4c32-a453-c91860550702",
+        "text": "llergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5027,
+        "end_pos": 5089,
+        "chunk_index": 44
+      },
+      {
+        "id": "0b003cd5-3800-4431-8333-eaa04fa2b172",
+        "text": "lergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5028,
+        "end_pos": 5089,
+        "chunk_index": 45
+      },
+      {
+        "id": "b6398db1-5357-4ddd-bca8-9ea945433246",
+        "text": "ergene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5029,
+        "end_pos": 5089,
+        "chunk_index": 46
+      },
+      {
+        "id": "09d4408a-f1cb-4f71-9ae2-5d058cd64c25",
+        "text": "rgene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5030,
+        "end_pos": 5089,
+        "chunk_index": 47
+      },
+      {
+        "id": "52c8183e-014e-41d5-8631-af9ff5885843",
+        "text": "gene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5031,
+        "end_pos": 5089,
+        "chunk_index": 48
+      },
+      {
+        "id": "f07df15d-5f1c-4e32-9e11-17ab30c53639",
+        "text": "ene Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5032,
+        "end_pos": 5089,
+        "chunk_index": 49
+      },
+      {
+        "id": "ce15c48b-1411-459f-8747-bae759802a54",
+        "text": "ne Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5033,
+        "end_pos": 5089,
+        "chunk_index": 50
+      },
+      {
+        "id": "a1280844-9e88-43e7-9b02-2ad4aa426edc",
+        "text": "e Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5034,
+        "end_pos": 5089,
+        "chunk_index": 51
+      },
+      {
+        "id": "48535cdc-0e1a-4dc2-b208-c03e22127dfb",
+        "text": "Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5035,
+        "end_pos": 5089,
+        "chunk_index": 52
+      },
+      {
+        "id": "2725efbd-7ff1-4e9f-adb8-e402ec9d1e1c",
+        "text": "Zutaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5036,
+        "end_pos": 5089,
+        "chunk_index": 53
+      },
+      {
+        "id": "bc4fb954-76af-40b9-a324-3c4f408e4cf9",
+        "text": "utaten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5037,
+        "end_pos": 5089,
+        "chunk_index": 54
+      },
+      {
+        "id": "00f064d4-6670-4b35-9f82-e77b8117960b",
+        "text": "taten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5038,
+        "end_pos": 5089,
+        "chunk_index": 55
+      },
+      {
+        "id": "e083ce95-f02e-45c9-b01e-ba01feb20d73",
+        "text": "aten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5039,
+        "end_pos": 5089,
+        "chunk_index": 56
+      },
+      {
+        "id": "25e34491-8546-497e-ad5b-f492868064e2",
+        "text": "ten in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5040,
+        "end_pos": 5089,
+        "chunk_index": 57
+      },
+      {
+        "id": "e3945626-922d-4100-a995-f5835f8290e8",
+        "text": "en in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5041,
+        "end_pos": 5089,
+        "chunk_index": 58
+      },
+      {
+        "id": "47ac31b4-c6f0-45fe-8b85-2b67f415fcd4",
+        "text": "n in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5042,
+        "end_pos": 5089,
+        "chunk_index": 59
+      },
+      {
+        "id": "a5a06193-61a0-42df-9a5f-5f7fbd2a979d",
+        "text": "in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5043,
+        "end_pos": 5089,
+        "chunk_index": 60
+      },
+      {
+        "id": "17dae614-21ac-4cef-a9b4-c4c64987bcb3",
+        "text": "in unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5044,
+        "end_pos": 5089,
+        "chunk_index": 61
+      },
+      {
+        "id": "859cc85c-8738-4b71-bfa2-932ab1275f52",
+        "text": "n unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5045,
+        "end_pos": 5089,
+        "chunk_index": 62
+      },
+      {
+        "id": "8cbea246-9a08-40fb-884d-c02482fb8313",
+        "text": "unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5046,
+        "end_pos": 5089,
+        "chunk_index": 63
+      },
+      {
+        "id": "6345772a-ffb2-445b-9ce2-ba065d2bcc63",
+        "text": "unseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5047,
+        "end_pos": 5089,
+        "chunk_index": 64
+      },
+      {
+        "id": "141be9c7-7706-452d-bc79-6fe19a0d41b1",
+        "text": "nseren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5048,
+        "end_pos": 5089,
+        "chunk_index": 65
+      },
+      {
+        "id": "6b36d1c7-35cd-4996-9080-4d0ea7552f0f",
+        "text": "seren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5049,
+        "end_pos": 5089,
+        "chunk_index": 66
+      },
+      {
+        "id": "2e7c0420-8bf8-4e67-8f04-1e5f3e97e08a",
+        "text": "eren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5050,
+        "end_pos": 5089,
+        "chunk_index": 67
+      },
+      {
+        "id": "0d7fe361-626c-4186-9cdb-c028324a0565",
+        "text": "ren Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5051,
+        "end_pos": 5089,
+        "chunk_index": 68
+      },
+      {
+        "id": "6602e600-788b-47c4-a94e-1f3362fe7f49",
+        "text": "en Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5052,
+        "end_pos": 5089,
+        "chunk_index": 69
+      },
+      {
+        "id": "1f7a198a-a91c-4e77-b712-24d926b43c8b",
+        "text": "n Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5053,
+        "end_pos": 5089,
+        "chunk_index": 70
+      },
+      {
+        "id": "ee1ec0b7-7e57-47d5-95c4-c3536af766e2",
+        "text": "Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5054,
+        "end_pos": 5089,
+        "chunk_index": 71
+      },
+      {
+        "id": "de954472-53fe-4cdb-a301-9f8c98038ff6",
+        "text": "Gerichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5055,
+        "end_pos": 5089,
+        "chunk_index": 72
+      },
+      {
+        "id": "3f511ae0-2e1d-45b7-8973-4394aef6b74c",
+        "text": "erichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5056,
+        "end_pos": 5089,
+        "chunk_index": 73
+      },
+      {
+        "id": "d6f6b613-aefc-4438-a5d8-b2b23c74f79f",
+        "text": "richten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5057,
+        "end_pos": 5089,
+        "chunk_index": 74
+      },
+      {
+        "id": "1209859b-f08f-434f-8db2-6b7bddb1370e",
+        "text": "ichten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5058,
+        "end_pos": 5089,
+        "chunk_index": 75
+      },
+      {
+        "id": "7c070255-1998-4d5a-9cde-19f48fb08f35",
+        "text": "chten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5059,
+        "end_pos": 5089,
+        "chunk_index": 76
+      },
+      {
+        "id": "8eaee3a5-0c39-4249-b299-c5524406c324",
+        "text": "hten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5060,
+        "end_pos": 5089,
+        "chunk_index": 77
+      },
+      {
+        "id": "9ab710f8-63a0-4e97-b65f-8881bf6b45eb",
+        "text": "ten.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5061,
+        "end_pos": 5089,
+        "chunk_index": 78
+      },
+      {
+        "id": "5d2635dc-3bae-44bd-8726-abb3c0425ea3",
+        "text": "en.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5062,
+        "end_pos": 5089,
+        "chunk_index": 79
+      },
+      {
+        "id": "341892e0-9e8d-4fb6-9925-d1c3f29f8ae9",
+        "text": "n.\nAlle Preise inkl. Mwst.",
+        "start_pos": 5063,
+        "end_pos": 5089,
+        "chunk_index": 80
+      },
+      {
+        "id": "a9b8db1c-2988-450d-9f20-b598c1375070",
+        "text": ".\nAlle Preise inkl. Mwst.",
+        "start_pos": 5064,
+        "end_pos": 5089,
+        "chunk_index": 81
+      },
+      {
+        "id": "ab943eb2-2a14-48da-a041-b6c4ac54ca66",
+        "text": "Alle Preise inkl. Mwst.",
+        "start_pos": 5065,
+        "end_pos": 5089,
+        "chunk_index": 82
+      },
+      {
+        "id": "042d52a9-c998-405e-8774-656192621b3a",
+        "text": "Alle Preise inkl. Mwst.",
+        "start_pos": 5066,
+        "end_pos": 5089,
+        "chunk_index": 83
+      },
+      {
+        "id": "9815a3a2-e136-4d24-85b1-dd7c0ccb54a7",
+        "text": "lle Preise inkl. Mwst.",
+        "start_pos": 5067,
+        "end_pos": 5089,
+        "chunk_index": 84
+      },
+      {
+        "id": "5208441d-e1ec-46a9-8a9b-8fa0fa49a125",
+        "text": "le Preise inkl. Mwst.",
+        "start_pos": 5068,
+        "end_pos": 5089,
+        "chunk_index": 85
+      },
+      {
+        "id": "766180ef-390e-43e1-8c5a-224a8eea4c73",
+        "text": "e Preise inkl. Mwst.",
+        "start_pos": 5069,
+        "end_pos": 5089,
+        "chunk_index": 86
+      },
+      {
+        "id": "0d606901-cd6f-4a95-9fc9-a2f1c50552c8",
+        "text": "Preise inkl. Mwst.",
+        "start_pos": 5070,
+        "end_pos": 5089,
+        "chunk_index": 87
+      },
+      {
+        "id": "cc8753e9-5447-4ee9-bf89-7990796b07a6",
+        "text": "Preise inkl. Mwst.",
+        "start_pos": 5071,
+        "end_pos": 5089,
+        "chunk_index": 88
+      },
+      {
+        "id": "66aac9ef-d0d9-4520-9e34-ec5e288d6be1",
+        "text": "reise inkl. Mwst.",
+        "start_pos": 5072,
+        "end_pos": 5089,
+        "chunk_index": 89
+      },
+      {
+        "id": "75c73464-82a7-42dc-a012-4957defbaf29",
+        "text": "eise inkl. Mwst.",
+        "start_pos": 5073,
+        "end_pos": 5089,
+        "chunk_index": 90
+      },
+      {
+        "id": "7c42f0d5-4e8c-47ab-ae28-e73b549e928a",
+        "text": "ise inkl. Mwst.",
+        "start_pos": 5074,
+        "end_pos": 5089,
+        "chunk_index": 91
+      },
+      {
+        "id": "4b10e0a0-d22e-4439-a304-1fc387eda008",
+        "text": "se inkl. Mwst.",
+        "start_pos": 5075,
+        "end_pos": 5089,
+        "chunk_index": 92
+      },
+      {
+        "id": "53879ab7-c56d-421f-9787-594895895642",
+        "text": "e inkl. Mwst.",
+        "start_pos": 5076,
+        "end_pos": 5089,
+        "chunk_index": 93
+      },
+      {
+        "id": "43214359-33f5-4401-9c3c-9c7baed40253",
+        "text": "inkl. Mwst.",
+        "start_pos": 5077,
+        "end_pos": 5089,
+        "chunk_index": 94
+      },
+      {
+        "id": "4038f3f2-c05b-4e0c-ad8c-2c7e6435ea31",
+        "text": "inkl. Mwst.",
+        "start_pos": 5078,
+        "end_pos": 5089,
+        "chunk_index": 95
+      },
+      {
+        "id": "5e6b0310-94a4-4d58-b616-388d83a9b887",
+        "text": "nkl. Mwst.",
+        "start_pos": 5079,
+        "end_pos": 5089,
+        "chunk_index": 96
+      },
+      {
+        "id": "38109ab7-e1ba-4349-a050-0db78e866e31",
+        "text": "kl. Mwst.",
+        "start_pos": 5080,
+        "end_pos": 5089,
+        "chunk_index": 97
+      },
+      {
+        "id": "a2cee612-2657-4916-931c-ba8fc9d329d1",
+        "text": "l. Mwst.",
+        "start_pos": 5081,
+        "end_pos": 5089,
+        "chunk_index": 98
+      },
+      {
+        "id": "af44acf2-be62-458f-b681-938e3278d91d",
+        "text": ". Mwst.",
+        "start_pos": 5082,
+        "end_pos": 5089,
+        "chunk_index": 99
+      },
+      {
+        "id": "1c34cf46-4a22-406f-994a-7b756f26624a",
+        "text": "Mwst.",
+        "start_pos": 5083,
+        "end_pos": 5089,
+        "chunk_index": 100
+      },
+      {
+        "id": "2c9d5bdf-7346-47e6-be3e-28cf2babdedf",
+        "text": "Mwst.",
+        "start_pos": 5084,
+        "end_pos": 5089,
+        "chunk_index": 101
+      },
+      {
+        "id": "63d48551-e3b6-4dfe-8182-984e9fc3ffc9",
+        "text": "wst.",
+        "start_pos": 5085,
+        "end_pos": 5089,
+        "chunk_index": 102
+      },
+      {
+        "id": "6db333be-ba0a-4163-a252-3d6ffeb22a3f",
+        "text": "st.",
+        "start_pos": 5086,
+        "end_pos": 5089,
+        "chunk_index": 103
+      },
+      {
+        "id": "7768b153-4209-464c-8c9f-1930b1757a4c",
+        "text": "t.",
+        "start_pos": 5087,
+        "end_pos": 5089,
+        "chunk_index": 104
+      },
+      {
+        "id": "9da9e259-e129-4d70-b5fa-fb3923a214d9",
+        "text": ".",
+        "start_pos": 5088,
+        "end_pos": 5089,
+        "chunk_index": 105
+      }
+    ],
+    "text_metadata": {
+      "word_count": 700,
+      "char_count": 5089,
+      "chunk_count": 106,
+      "extraction_method": "pdf",
+      "processed_at": "2025-07-10T17:53:04.101944"
+    },
+    "processing_error": null,
+    "processed_at": "2025-07-10T17:53:04.102691"
+  }
+}
