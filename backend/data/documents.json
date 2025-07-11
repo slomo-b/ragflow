@@ -34,7 +34,29 @@
       "processed_at": "2025-07-10T17:51:12.819899"
     },
     "processing_error": null,
-    "processed_at": "2025-07-10T17:51:12.819899"
+    "processed_at": "2025-07-10T17:51:12.819899",
+    "intelligence_features": {
+      "keywords_extracted": true,
+      "content_analyzed": true,
+      "search_ready": true,
+      "keywords": [
+        "dokument",
+        "zeile",
+        "test",
+        "backend",
+        "dies",
+        "ragflow",
+        "inhalt",
+        "erste",
+        "zweite",
+        "dritte",
+        "sollte",
+        "dieses",
+        "verarbeiten",
+        "können"
+      ],
+      "content_preview": "# Test Dokument\n\nDies ist ein Test-Dokument für das RagFlow Backend.\n\n## Inhalt\n- Erste Zeile\n- Zweite Zeile  \n- Dritte Zeile\n\nDas Backend sollte dieses Dokument verarbeiten können.\n"
+    }
   },
   "c88430a3-56a7-453b-bfb9-bd3fd7c899b8": {
     "id": "c88430a3-56a7-453b-bfb9-bd3fd7c899b8",
@@ -804,7 +826,30 @@
       "processed_at": "2025-07-10T17:51:14.078290"
     },
     "processing_error": null,
-    "processed_at": "2025-07-10T17:51:14.078290"
+    "processed_at": "2025-07-10T17:51:14.078290",
+    "intelligence_features": {
+      "keywords_extracted": true,
+      "content_analyzed": true,
+      "search_ready": true,
+      "keywords": [
+        "unser",
+        "alle",
+        "seite",
+        "servicepersonal",
+        "informiert",
+        "allergene",
+        "zutaten",
+        "unseren",
+        "gerichten",
+        "preise",
+        "inkl",
+        "mwst",
+        "einer",
+        "feinen",
+        "person"
+      ],
+      "content_preview": "[Seite 1]\nANTIPASTI\nL’INSALATA DI MISTICANZA CHF 16.50\nVerschiedene frische und knackige saisonale\nBlatt- und Rohkostsalate mit <Pane Carasau> und\nhausgemachtem Dressing.\nLA PARMIGIANA BUFALINA CHF 22.50\nHausgemachter Auberginenauflauf mit San Marzanosauce,\nParmesan, Basilikum und Büffelmozzarella DOP.\nFIOR DI PRIMAVERA CHF 26.50\nKnusprige Zucchiniblüten gefüllt mit Pecorino Romano auf\ngerösteter roter Paprika Creme, grünem Spargel und Limetten-\nJoghurt.\nIL POLIPO D’AUTORE CHF 29.50\nGebratener O..."
+    }
   },
   "095fdd4f-89f6-4145-b539-4217cd90fd19": {
     "id": "095fdd4f-89f6-4145-b539-4217cd90fd19",
@@ -1573,6 +1618,29 @@
       "processed_at": "2025-07-10T17:53:04.101944"
     },
     "processing_error": null,
-    "processed_at": "2025-07-10T17:53:04.102691"
+    "processed_at": "2025-07-10T17:53:04.102691",
+    "intelligence_features": {
+      "keywords_extracted": true,
+      "content_analyzed": true,
+      "search_ready": true,
+      "keywords": [
+        "unser",
+        "alle",
+        "seite",
+        "servicepersonal",
+        "informiert",
+        "allergene",
+        "zutaten",
+        "unseren",
+        "gerichten",
+        "preise",
+        "inkl",
+        "mwst",
+        "einer",
+        "feinen",
+        "person"
+      ],
+      "content_preview": "[Seite 1]\nANTIPASTI\nL’INSALATA DI MISTICANZA CHF 16.50\nVerschiedene frische und knackige saisonale\nBlatt- und Rohkostsalate mit <Pane Carasau> und\nhausgemachtem Dressing.\nLA PARMIGIANA BUFALINA CHF 22.50\nHausgemachter Auberginenauflauf mit San Marzanosauce,\nParmesan, Basilikum und Büffelmozzarella DOP.\nFIOR DI PRIMAVERA CHF 26.50\nKnusprige Zucchiniblüten gefüllt mit Pecorino Romano auf\ngerösteter roter Paprika Creme, grünem Spargel und Limetten-\nJoghurt.\nIL POLIPO D’AUTORE CHF 29.50\nGebratener O..."
+    }
   }
 }
