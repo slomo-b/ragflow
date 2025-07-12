@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-RAG Document Processor für RagFlow
-Extrahiert Text aus PDFs und anderen Dokumenten für AI-Analyse
+FIXED RAG Document Processor für RagFlow mit umfassendem Debugging
+Behebt Projekt-Zuordnung und Upload-Probleme
 """
 
 import os
 import uuid
+import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import asyncio
@@ -15,48 +16,220 @@ from datetime import datetime
 try:
     import PyPDF2
     PYPDF2_AVAILABLE = True
+    print("✅ PyPDF2 verfügbar")
 except ImportError:
     PYPDF2_AVAILABLE = False
-    print("⚠️ PyPDF2 nicht verfügbar")
+    print("⚠️ PyPDF2 nicht verfügbar - pip install PyPDF2")
 
 try:
     import pdfplumber
     PDFPLUMBER_AVAILABLE = True
+    print("✅ pdfplumber verfügbar")
 except ImportError:
     PDFPLUMBER_AVAILABLE = False
-    print("⚠️ pdfplumber nicht verfügbar")
+    print("⚠️ pdfplumber nicht verfügbar - pip install pdfplumber")
 
 try:
     from docx import Document as DocxDocument
     DOCX_AVAILABLE = True
+    print("✅ python-docx verfügbar")
 except ImportError:
     DOCX_AVAILABLE = False
-    print("⚠️ python-docx nicht verfügbar")
+    print("⚠️ python-docx nicht verfügbar - pip install python-docx")
 
-class DocumentProcessor:
-    """Verarbeitet verschiedene Dokumenttypen und extrahiert Text"""
+class DebugLogger:
+    """Debugging Logger für bessere Fehlerdiagnose"""
     
-    def __init__(self):
+    def __init__(self, debug_file: str = "debug_document_processing.log"):
+        self.debug_file = debug_file
+        self.debug_data = []
+    
+    def log(self, level: str, message: str, data: Any = None):
+        """Log debug information"""
+        timestamp = datetime.utcnow().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "level": level,
+            "message": message,
+            "data": data
+        }
+        
+        self.debug_data.append(log_entry)
+        
+        # Console output mit Emojis
+        emoji_map = {
+            "INFO": "ℹ️",
+            "SUCCESS": "✅", 
+            "WARNING": "⚠️",
+            "ERROR": "❌",
+            "DEBUG": "🔍"
+        }
+        
+        emoji = emoji_map.get(level, "📝")
+        print(f"{emoji} [{level}] {message}")
+        
+        if data:
+            print(f"    💾 Data: {data}")
+    
+    def save_debug_log(self):
+        """Save debug log to file"""
+        try:
+            with open(self.debug_file, 'w', encoding='utf-8') as f:
+                json.dump(self.debug_data, f, indent=2, ensure_ascii=False)
+            print(f"📄 Debug log saved to: {self.debug_file}")
+        except Exception as e:
+            print(f"❌ Failed to save debug log: {e}")
+    
+    def get_debug_summary(self) -> Dict[str, Any]:
+        """Get summary of debug session"""
+        levels = {}
+        for entry in self.debug_data:
+            level = entry["level"]
+            levels[level] = levels.get(level, 0) + 1
+        
+        return {
+            "total_entries": len(self.debug_data),
+            "levels": levels,
+            "session_start": self.debug_data[0]["timestamp"] if self.debug_data else None,
+            "session_end": self.debug_data[-1]["timestamp"] if self.debug_data else None
+        }
+
+class FixedDocumentProcessor:
+    """FIXED Document Processor mit Debugging und korrekter Projekt-Zuordnung"""
+    
+    def __init__(self, debug_mode: bool = True):
+        self.debug = DebugLogger() if debug_mode else None
         self.supported_types = {
             'pdf': self._extract_pdf_text,
             'docx': self._extract_docx_text,
             'txt': self._extract_txt_text,
-            'md': self._extract_txt_text  # Markdown wie Text behandeln
+            'md': self._extract_txt_text
         }
+        
+        if self.debug:
+            self.debug.log("INFO", "FixedDocumentProcessor initialisiert", {
+                "supported_types": list(self.supported_types.keys()),
+                "pdf_available": PDFPLUMBER_AVAILABLE or PYPDF2_AVAILABLE,
+                "docx_available": DOCX_AVAILABLE
+            })
     
-    async def process_document(self, file_path: str, file_type: str) -> Dict[str, Any]:
+    async def process_document_with_project(self, file_path: str, file_type: str, 
+                                          document_id: str, project_id: str,
+                                          documents_db: dict) -> Dict[str, Any]:
         """
-        Hauptfunktion zur Dokumentenverarbeitung
+        FIXED: Verarbeitet Dokument UND ordnet es korrekt dem Projekt zu
         
         Args:
             file_path: Pfad zur Datei
-            file_type: Dateityp (pdf, docx, txt, md)
-            
-        Returns:
-            Dict mit extrahiertem Text und Metadaten
+            file_type: Dateityp
+            document_id: Dokument-ID
+            project_id: Projekt-ID (WICHTIG!)
+            documents_db: Dokumenten-Datenbank
         """
+        if self.debug:
+            self.debug.log("INFO", f"Starte Dokumentverarbeitung mit Projekt-Zuordnung", {
+                "file_path": file_path,
+                "file_type": file_type,
+                "document_id": document_id,
+                "project_id": project_id
+            })
+        
+        # 1. Prüfe ob Dokument in DB existiert
+        if document_id not in documents_db:
+            error_msg = f"Dokument-ID {document_id} nicht in Datenbank gefunden"
+            if self.debug:
+                self.debug.log("ERROR", error_msg, {"available_docs": list(documents_db.keys())})
+            return {"success": False, "error": error_msg}
+        
+        doc = documents_db[document_id]
+        
+        # 2. FIXED: Stelle sicher dass project_ids existiert
+        if "project_ids" not in doc:
+            doc["project_ids"] = []
+            if self.debug:
+                self.debug.log("WARNING", "project_ids fehlte - wurde erstellt")
+        
+        # 3. FIXED: Füge Projekt-ID hinzu wenn nicht vorhanden
+        if project_id not in doc["project_ids"]:
+            doc["project_ids"].append(project_id)
+            if self.debug:
+                self.debug.log("SUCCESS", f"Projekt {project_id} zu Dokument hinzugefügt", {
+                    "document_project_ids": doc["project_ids"]
+                })
+        
+        # 4. Verarbeite das Dokument
         try:
-            print(f"🔄 Verarbeite Dokument: {file_path} (Typ: {file_type})")
+            doc["processing_status"] = "processing"
+            
+            result = await self.process_document(file_path, file_type)
+            
+            if result["success"]:
+                # Erfolgreiche Verarbeitung
+                doc["processing_status"] = "completed"
+                doc["extracted_text"] = result["text"]
+                doc["text_chunks"] = result["chunks"]
+                doc["text_metadata"] = result["metadata"]
+                doc["processing_error"] = None
+                doc["processed_at"] = datetime.utcnow().isoformat()
+                
+                if self.debug:
+                    self.debug.log("SUCCESS", f"Dokument erfolgreich verarbeitet", {
+                        "filename": doc.get("filename"),
+                        "word_count": result["metadata"].get("word_count"),
+                        "chunk_count": len(result["chunks"]),
+                        "project_ids": doc["project_ids"]
+                    })
+                
+                return {
+                    "success": True,
+                    "document_id": document_id,
+                    "project_id": project_id,
+                    "text_preview": result["text"][:200] + "..." if len(result["text"]) > 200 else result["text"],
+                    "metadata": result["metadata"]
+                }
+            else:
+                # Fehler bei Verarbeitung
+                doc["processing_status"] = "failed"
+                doc["processing_error"] = result["error"]
+                doc["extracted_text"] = ""
+                doc["text_chunks"] = []
+                
+                if self.debug:
+                    self.debug.log("ERROR", f"Dokumentverarbeitung fehlgeschlagen", {
+                        "filename": doc.get("filename"),
+                        "error": result["error"]
+                    })
+                
+                return {"success": False, "error": result["error"]}
+                
+        except Exception as e:
+            error_msg = f"Unerwarteter Fehler bei Verarbeitung: {str(e)}"
+            doc["processing_status"] = "failed"
+            doc["processing_error"] = error_msg
+            
+            if self.debug:
+                self.debug.log("ERROR", error_msg, {"exception_type": type(e).__name__})
+            
+            return {"success": False, "error": error_msg}
+    
+    async def process_document(self, file_path: str, file_type: str) -> Dict[str, Any]:
+        """Basis-Dokumentverarbeitung (bestehende Logik)"""
+        try:
+            if self.debug:
+                self.debug.log("INFO", f"Starte Basis-Verarbeitung", {
+                    "file_path": file_path,
+                    "file_type": file_type,
+                    "file_exists": os.path.exists(file_path)
+                })
+            
+            if not os.path.exists(file_path):
+                return {
+                    "success": False,
+                    "error": f"Datei nicht gefunden: {file_path}",
+                    "text": "",
+                    "chunks": [],
+                    "metadata": {}
+                }
             
             if file_type not in self.supported_types:
                 return {
@@ -80,7 +253,7 @@ class DocumentProcessor:
                     "metadata": {}
                 }
             
-            # Text in Chunks aufteilen (für bessere AI-Verarbeitung)
+            # Text in Chunks aufteilen
             chunks = self._chunk_text(text)
             
             # Metadaten erstellen
@@ -92,7 +265,8 @@ class DocumentProcessor:
                 "processed_at": datetime.utcnow().isoformat()
             }
             
-            print(f"✅ Verarbeitung erfolgreich: {metadata['word_count']} Wörter, {len(chunks)} Chunks")
+            if self.debug:
+                self.debug.log("SUCCESS", "Basis-Verarbeitung erfolgreich", metadata)
             
             return {
                 "success": True,
@@ -103,19 +277,28 @@ class DocumentProcessor:
             }
             
         except Exception as e:
-            print(f"❌ Fehler bei Verarbeitung: {str(e)}")
+            error_msg = f"Fehler bei der Verarbeitung: {str(e)}"
+            if self.debug:
+                self.debug.log("ERROR", error_msg, {"exception_type": type(e).__name__})
+            
             return {
                 "success": False,
-                "error": f"Fehler bei der Verarbeitung: {str(e)}",
+                "error": error_msg,
                 "text": "",
                 "chunks": [],
                 "metadata": {}
             }
     
     async def _extract_pdf_text(self, file_path: str) -> str:
-        """Extrahiert Text aus PDF-Dateien"""
+        """Extrahiert Text aus PDF-Dateien mit Debugging"""
+        if self.debug:
+            self.debug.log("INFO", "PDF-Textextraktion gestartet", {
+                "pdfplumber_available": PDFPLUMBER_AVAILABLE,
+                "pypdf2_available": PYPDF2_AVAILABLE
+            })
+        
         try:
-            # Versuch 1: pdfplumber (bessere Ergebnisse)
+            # Versuch 1: pdfplumber
             if PDFPLUMBER_AVAILABLE:
                 try:
                     import pdfplumber
@@ -125,22 +308,27 @@ class DocumentProcessor:
                             try:
                                 page_text = page.extract_text()
                                 if page_text and page_text.strip():
-                                    # Säubere den Text
                                     cleaned_text = self._clean_extracted_text(page_text)
                                     if cleaned_text:
                                         text_parts.append(f"[Seite {page_num + 1}]\n{cleaned_text}")
                             except Exception as page_error:
-                                print(f"Fehler bei Seite {page_num + 1}: {page_error}")
+                                if self.debug:
+                                    self.debug.log("WARNING", f"Fehler bei Seite {page_num + 1}", str(page_error))
                                 continue
                         
                         full_text = "\n\n".join(text_parts)
                         if full_text.strip():
-                            print(f"✅ pdfplumber: {len(text_parts)} Seiten extrahiert")
+                            if self.debug:
+                                self.debug.log("SUCCESS", f"pdfplumber erfolgreich", {
+                                    "pages_extracted": len(text_parts),
+                                    "total_chars": len(full_text)
+                                })
                             return full_text
                 except Exception as e:
-                    print(f"pdfplumber Fehler: {e}")
+                    if self.debug:
+                        self.debug.log("WARNING", f"pdfplumber Fehler: {e}")
             
-            # Versuch 2: PyPDF2 (Fallback)
+            # Versuch 2: PyPDF2
             if PYPDF2_AVAILABLE:
                 try:
                     import PyPDF2
@@ -156,27 +344,39 @@ class DocumentProcessor:
                                     if cleaned_text:
                                         text_parts.append(f"[Seite {page_num + 1}]\n{cleaned_text}")
                             except Exception as page_error:
-                                print(f"PyPDF2 Fehler bei Seite {page_num + 1}: {page_error}")
+                                if self.debug:
+                                    self.debug.log("WARNING", f"PyPDF2 Fehler bei Seite {page_num + 1}", str(page_error))
                                 continue
                         
                         full_text = "\n\n".join(text_parts)
                         if full_text.strip():
-                            print(f"✅ PyPDF2: {len(text_parts)} Seiten extrahiert")
+                            if self.debug:
+                                self.debug.log("SUCCESS", f"PyPDF2 erfolgreich", {
+                                    "pages_extracted": len(text_parts),
+                                    "total_chars": len(full_text)
+                                })
                             return full_text
                 except Exception as e:
-                    print(f"PyPDF2 Fehler: {e}")
+                    if self.debug:
+                        self.debug.log("WARNING", f"PyPDF2 Fehler: {e}")
             
-            print("❌ Keine funktionsfähige PDF-Bibliothek gefunden")
-            return "PDF-Text konnte nicht extrahiert werden. Bitte installiere: pip install pdfplumber PyPDF2"
+            error_msg = "Keine funktionsfähige PDF-Bibliothek gefunden"
+            if self.debug:
+                self.debug.log("ERROR", error_msg)
+            return ""
             
         except Exception as e:
-            print(f"PDF Extraction Fehler: {e}")
+            if self.debug:
+                self.debug.log("ERROR", f"PDF Extraction Fehler: {e}")
             return ""
     
     async def _extract_docx_text(self, file_path: str) -> str:
-        """Extrahiert Text aus DOCX-Dateien"""
+        """Extrahiert Text aus DOCX-Dateien mit Debugging"""
         if not DOCX_AVAILABLE:
-            return "DOCX-Verarbeitung nicht verfügbar. Installiere: pip install python-docx"
+            error_msg = "DOCX-Verarbeitung nicht verfügbar"
+            if self.debug:
+                self.debug.log("ERROR", error_msg)
+            return ""
             
         try:
             from docx import Document
@@ -187,7 +387,7 @@ class DocumentProcessor:
                 if paragraph.text.strip():
                     text_parts.append(paragraph.text.strip())
             
-            # Extrahiere auch Text aus Tabellen
+            # Extrahiere Text aus Tabellen
             for table in doc.tables:
                 table_text = []
                 for row in table.rows:
@@ -202,80 +402,75 @@ class DocumentProcessor:
                     text_parts.append("\n[Tabelle]\n" + "\n".join(table_text))
             
             full_text = "\n\n".join(text_parts)
-            if full_text.strip():
-                print(f"✅ DOCX: Text extrahiert ({len(text_parts)} Abschnitte)")
-                return full_text
+            if self.debug:
+                self.debug.log("SUCCESS", f"DOCX Text extrahiert", {
+                    "paragraphs": len([p for p in doc.paragraphs if p.text.strip()]),
+                    "tables": len(doc.tables),
+                    "total_chars": len(full_text)
+                })
             
-            return ""
+            return full_text
             
         except Exception as e:
-            print(f"DOCX Extraction Fehler: {e}")
+            if self.debug:
+                self.debug.log("ERROR", f"DOCX Extraction Fehler: {e}")
             return ""
     
     async def _extract_txt_text(self, file_path: str) -> str:
-        """Extrahiert Text aus TXT/MD-Dateien"""
+        """Extrahiert Text aus TXT/MD-Dateien mit Debugging"""
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
                 text = file.read()
-                print(f"✅ TXT: {len(text)} Zeichen extrahiert")
+                if self.debug:
+                    self.debug.log("SUCCESS", f"TXT Text extrahiert", {
+                        "encoding": "utf-8",
+                        "chars": len(text)
+                    })
                 return text
         except UnicodeDecodeError:
-            # Fallback für andere Encodings
             try:
                 with open(file_path, 'r', encoding='latin-1') as file:
                     text = file.read()
-                    print(f"✅ TXT (Latin-1): {len(text)} Zeichen extrahiert")
+                    if self.debug:
+                        self.debug.log("SUCCESS", f"TXT Text extrahiert", {
+                            "encoding": "latin-1",
+                            "chars": len(text)
+                        })
                     return text
             except Exception as e:
-                print(f"TXT Extraction Fehler: {e}")
+                if self.debug:
+                    self.debug.log("ERROR", f"TXT Extraction Fehler: {e}")
                 return ""
         except Exception as e:
-            print(f"TXT Extraction Fehler: {e}")
+            if self.debug:
+                self.debug.log("ERROR", f"TXT Extraction Fehler: {e}")
             return ""
     
     def _clean_extracted_text(self, text: str) -> str:
-        """Säubert extrahierten Text von häufigen Problemen"""
+        """Säubert extrahierten Text"""
         if not text:
             return ""
         
-        # Entferne übermäßige Leerzeichen und Zeilenumbrüche
         import re
-        
-        # Ersetze mehrfache Leerzeichen durch einzelne
         text = re.sub(r' +', ' ', text)
-        
-        # Ersetze mehrfache Zeilenumbrüche durch maximal zwei
         text = re.sub(r'\n{3,}', '\n\n', text)
-        
-        # Entferne Leerzeichen am Zeilenanfang und -ende
         lines = [line.strip() for line in text.split('\n')]
         text = '\n'.join(lines)
-        
-        # Entferne leere Zeilen am Anfang und Ende
-        text = text.strip()
-        
-        return text
+        return text.strip()
     
     def _chunk_text(self, text: str, max_chunk_size: int = 1000, overlap: int = 100) -> List[Dict[str, Any]]:
-        """
-        Teilt Text in überlappende Chunks für bessere AI-Verarbeitung
-        
-        Args:
-            text: Zu teilender Text
-            max_chunk_size: Maximale Chunk-Größe in Zeichen
-            overlap: Überlappung zwischen Chunks
-            
-        Returns:
-            Liste von Chunks mit Metadaten
-        """
+        """Teilt Text in Chunks mit Debugging"""
         if len(text) <= max_chunk_size:
-            return [{
+            chunk = {
                 "id": str(uuid.uuid4()),
                 "text": text,
                 "start_pos": 0,
                 "end_pos": len(text),
                 "chunk_index": 0
-            }]
+            }
+            if self.debug:
+                self.debug.log("INFO", "Single chunk created", {"size": len(text)})
+            return [chunk]
         
         chunks = []
         start = 0
@@ -286,12 +481,10 @@ class DocumentProcessor:
             
             # Versuche an Satzende zu teilen
             if end < len(text):
-                # Suche nach dem letzten Punkt vor dem Ende
                 last_sentence = text.rfind('.', start, end)
                 if last_sentence > start + max_chunk_size * 0.5:
                     end = last_sentence + 1
                 else:
-                    # Suche nach Leerzeichen
                     last_space = text.rfind(' ', start, end)
                     if last_space > start + max_chunk_size * 0.5:
                         end = last_space
@@ -307,67 +500,123 @@ class DocumentProcessor:
                 })
                 chunk_index += 1
             
-            # Nächster Start mit Überlappung
             start = max(start + 1, end - overlap)
+        
+        if self.debug:
+            self.debug.log("INFO", f"Text chunking completed", {
+                "total_chunks": len(chunks),
+                "average_size": sum(len(c["text"]) for c in chunks) // len(chunks) if chunks else 0
+            })
         
         return chunks
 
-# RAG Integration für Chat
-class RAGChatEnhancer:
-    """Erweitert Chat-Anfragen um Dokumentenkontext"""
+class FixedRAGChatEnhancer:
+    """FIXED RAG Chat Enhancer mit besserer Debugging"""
     
-    def __init__(self, documents_db: dict):
+    def __init__(self, documents_db: dict, debug_mode: bool = True):
         self.documents_db = documents_db
+        self.debug = DebugLogger() if debug_mode else None
     
-    def find_relevant_content(self, query: str, project_id: str, max_chunks: int = 3) -> List[str]:
-        """
-        Findet relevante Dokumenteninhalte für eine Anfrage
+    def find_relevant_content(self, query: str, project_id: str, max_chunks: int = 3) -> List[Dict[str, Any]]:
+        """FIXED: Findet relevante Inhalte mit detailliertem Debugging"""
         
-        Args:
-            query: Benutzeranfrage
-            project_id: Projekt-ID
-            max_chunks: Maximale Anzahl relevanter Chunks
-            
-        Returns:
-            Liste relevanter Textpassagen
-        """
-        relevant_content = []
+        if self.debug:
+            self.debug.log("INFO", f"Starte intelligente Suche", {
+                "query": query,
+                "project_id": project_id,
+                "max_chunks": max_chunks
+            })
         
-        print(f"🔍 Suche relevante Inhalte für Query: '{query}' in Projekt: {project_id}")
+        # 1. Finde alle Dokumente
+        all_docs = list(self.documents_db.values())
+        if self.debug:
+            self.debug.log("DEBUG", f"Alle Dokumente in DB", {
+                "total_documents": len(all_docs),
+                "document_ids": [doc.get("id", "no_id") for doc in all_docs]
+            })
         
-        # Finde Dokumente des Projekts
+        # 2. Filtere nach Projekt
         project_docs = [
-            doc for doc in self.documents_db.values()
-            if project_id in doc.get("project_ids", []) and 
-               doc.get("processing_status") == "completed" and
-               doc.get("extracted_text")
+            doc for doc in all_docs
+            if project_id in doc.get("project_ids", [])
         ]
         
-        print(f"📄 Gefundene verarbeitete Dokumente: {len(project_docs)}")
+        if self.debug:
+            self.debug.log("DEBUG", f"Dokumente im Projekt gefiltert", {
+                "project_documents": len(project_docs),
+                "project_doc_names": [doc.get("filename", "no_name") for doc in project_docs]
+            })
         
-        if not project_docs:
+        # 3. Filtere nach Verarbeitungsstatus
+        processed_docs = [
+            doc for doc in project_docs
+            if doc.get("processing_status") == "completed" and doc.get("extracted_text")
+        ]
+        
+        if self.debug:
+            self.debug.log("DEBUG", f"Verarbeitete Dokumente gefiltert", {
+                "processed_documents": len(processed_docs),
+                "processed_doc_details": [
+                    {
+                        "filename": doc.get("filename"),
+                        "status": doc.get("processing_status"),
+                        "has_text": bool(doc.get("extracted_text")),
+                        "text_length": len(doc.get("extracted_text", ""))
+                    }
+                    for doc in processed_docs
+                ]
+            })
+        
+        if not processed_docs:
+            if self.debug:
+                self.debug.log("WARNING", "Keine verarbeiteten Dokumente gefunden", {
+                    "total_docs_in_project": len(project_docs),
+                    "project_doc_statuses": [
+                        {
+                            "filename": doc.get("filename"),
+                            "status": doc.get("processing_status"),
+                            "has_project_ids": bool(doc.get("project_ids")),
+                            "project_ids": doc.get("project_ids", [])
+                        }
+                        for doc in project_docs
+                    ]
+                })
             return []
         
+        # 4. Durchsuche Inhalte
+        relevant_content = []
         query_lower = query.lower()
+        query_words = query_lower.split()
         
-        for doc in project_docs:
-            print(f"🔍 Durchsuche: {doc.get('filename', 'Unknown')}")
+        for doc in processed_docs:
+            if self.debug:
+                self.debug.log("DEBUG", f"Durchsuche Dokument", {
+                    "filename": doc.get("filename"),
+                    "text_length": len(doc.get("extracted_text", ""))
+                })
             
-            # Einfache Keyword-Suche im vollständigen Text
             full_text = doc.get("extracted_text", "")
-            if query_lower in full_text.lower():
-                # Finde relevante Abschnitte um die Keywords
-                text_lower = full_text.lower()
+            text_lower = full_text.lower()
+            
+            # Keyword-Suche
+            total_matches = 0
+            for word in query_words:
+                matches = text_lower.count(word)
+                total_matches += matches
+            
+            if total_matches > 0:
+                # Finde Kontexte um Keywords
                 positions = []
-                start = 0
-                while True:
-                    pos = text_lower.find(query_lower, start)
-                    if pos == -1:
-                        break
-                    positions.append(pos)
-                    start = pos + 1
+                for word in query_words:
+                    start = 0
+                    while True:
+                        pos = text_lower.find(word, start)
+                        if pos == -1:
+                            break
+                        positions.append(pos)
+                        start = pos + 1
                 
-                # Extrahiere Kontext um die gefundenen Positionen
+                # Extrahiere Kontexte
                 for pos in positions[:max_chunks]:
                     context_start = max(0, pos - 200)
                     context_end = min(len(full_text), pos + 200)
@@ -376,113 +625,101 @@ class RAGChatEnhancer:
                     relevant_content.append({
                         "text": context,
                         "source": doc.get("filename", "Unknown"),
-                        "score": 1.0,
-                        "position": pos
-                    })
-            
-            # Suche auch in Chunks wenn verfügbar
-            chunks = doc.get("text_chunks", [])
-            for chunk in chunks[:10]:  # Begrenze auf erste 10 Chunks
-                chunk_text = chunk.get("text", "").lower()
-                
-                # Prüfe auf Keyword-Übereinstimmungen
-                query_words = query_lower.split()
-                matches = sum(1 for word in query_words if word in chunk_text)
-                
-                if matches > 0:
-                    relevance_score = matches / len(query_words)
-                    relevant_content.append({
-                        "text": chunk.get("text", ""),
-                        "source": doc.get("filename", "Unknown"),
-                        "score": relevance_score,
-                        "chunk_id": chunk.get("id")
+                        "document_id": doc.get("id"),
+                        "score": total_matches / len(query_words),
+                        "match_count": total_matches
                     })
         
-        # Sortiere nach Relevanz und begrenze Ergebnisse
+        # Sortiere und limitiere
         relevant_content.sort(key=lambda x: x["score"], reverse=True)
-        result_texts = [item["text"] for item in relevant_content[:max_chunks]]
+        result = relevant_content[:max_chunks]
         
-        print(f"✅ Gefunden: {len(result_texts)} relevante Textpassagen")
+        if self.debug:
+            self.debug.log("SUCCESS", f"Relevante Inhalte gefunden", {
+                "total_found": len(relevant_content),
+                "returned": len(result),
+                "result_sources": [item["source"] for item in result]
+            })
         
-        return result_texts
-    
-    def enhance_prompt_with_context(self, user_query: str, project_id: str, base_prompt: str) -> str:
-        """
-        Erweitert den Prompt um relevanten Dokumentenkontext
-        
-        Args:
-            user_query: Benutzeranfrage
-            project_id: Projekt-ID
-            base_prompt: Basis System-Prompt
-            
-        Returns:
-            Erweiterter Prompt mit Dokumentenkontext
-        """
-        relevant_content = self.find_relevant_content(user_query, project_id)
-        
-        if not relevant_content:
-            print("ℹ️ Keine relevanten Dokumenteninhalte gefunden")
-            return base_prompt
-        
-        # Füge Dokumentenkontext hinzu
-        context_section = "\n\nRELEVANTE DOKUMENTENINHALTE:\n"
-        context_section += "=" * 50 + "\n"
-        
-        for i, content in enumerate(relevant_content, 1):
-            context_section += f"\n[Abschnitt {i}]\n"
-            context_section += content[:800] + ("..." if len(content) > 800 else "")
-            context_section += "\n" + "-" * 30 + "\n"
-        
-        context_section += "\nBitte beziehe dich in deiner Antwort auf diese Dokumenteninhalte, wenn sie relevant für die Frage sind.\n"
-        
-        print(f"✅ Prompt erweitert mit {len(relevant_content)} Dokumentenabschnitten")
-        
-        return base_prompt + context_section
+        return result
 
-# Utility-Funktionen
-async def process_uploaded_document(file_path: str, file_type: str, document_id: str, documents_db: dict):
-    """
-    Verarbeitet ein hochgeladenes Dokument und aktualisiert die Datenbank
+# Test und Debug Funktionen
+async def debug_document_processing(file_path: str, project_id: str, documents_db: dict):
+    """Debug-Funktion zum Testen der Dokumentverarbeitung"""
     
-    Args:
-        file_path: Pfad zur Datei
-        file_type: Dateityp
-        document_id: Dokument-ID in der DB
-        documents_db: Dokumenten-Datenbank
-    """
-    print(f"🚀 Starte Dokumentenverarbeitung: {file_path}")
+    print("🧪 === DEBUG DOCUMENT PROCESSING ===")
     
-    processor = DocumentProcessor()
+    processor = FixedDocumentProcessor(debug_mode=True)
     
-    # Dokument verarbeiten
-    result = await processor.process_document(file_path, file_type)
+    # Erstelle Test-Dokument in DB wenn nicht vorhanden
+    document_id = str(uuid.uuid4())
+    file_type = Path(file_path).suffix.lower().lstrip('.')
     
-    # Datenbank aktualisieren
-    if document_id in documents_db:
-        doc = documents_db[document_id]
-        
-        if result["success"]:
-            doc["processing_status"] = "completed"
-            doc["extracted_text"] = result["text"]
-            doc["text_chunks"] = result["chunks"]
-            doc["text_metadata"] = result["metadata"]
-            doc["processing_error"] = None
-            print(f"✅ Dokument {doc['filename']} erfolgreich verarbeitet")
-        else:
-            doc["processing_status"] = "failed"
-            doc["processing_error"] = result["error"]
-            doc["extracted_text"] = ""
-            doc["text_chunks"] = []
-            print(f"❌ Fehler bei {doc['filename']}: {result['error']}")
-        
-        doc["processed_at"] = datetime.utcnow().isoformat()
+    documents_db[document_id] = {
+        "id": document_id,
+        "filename": Path(file_path).name,
+        "file_type": file_type,
+        "file_path": file_path,
+        "uploaded_at": datetime.utcnow().isoformat(),
+        "processing_status": "pending"
+    }
+    
+    print(f"📄 Test-Dokument erstellt: {document_id}")
+    
+    # Verarbeite Dokument
+    result = await processor.process_document_with_project(
+        file_path, file_type, document_id, project_id, documents_db
+    )
+    
+    print("\n📊 === VERARBEITUNGS-ERGEBNIS ===")
+    print(f"Erfolg: {result.get('success')}")
+    if result.get('success'):
+        print(f"Text-Vorschau: {result.get('text_preview', 'Keine Vorschau')}")
+        print(f"Metadaten: {result.get('metadata', {})}")
     else:
-        print(f"⚠️ Dokument-ID {document_id} nicht in Datenbank gefunden")
+        print(f"Fehler: {result.get('error')}")
+    
+    print("\n🔍 === DOKUMENT STATUS IN DB ===")
+    doc = documents_db[document_id]
+    print(f"Status: {doc.get('processing_status')}")
+    print(f"Projekt-IDs: {doc.get('project_ids', [])}")
+    print(f"Hat Text: {bool(doc.get('extracted_text'))}")
+    print(f"Text-Länge: {len(doc.get('extracted_text', ''))}")
+    
+    # Teste RAG-Suche
+    print("\n🧠 === RAG-SUCHE TEST ===")
+    rag_enhancer = FixedRAGChatEnhancer(documents_db, debug_mode=True)
+    
+    test_queries = ["test", "inhalt", doc.get("filename", "").split(".")[0]]
+    
+    for query in test_queries:
+        print(f"\n🔍 Teste Query: '{query}'")
+        results = rag_enhancer.find_relevant_content(query, project_id)
+        print(f"Gefunden: {len(results)} Ergebnisse")
+        for i, result in enumerate(results):
+            print(f"  {i+1}. {result['source']} (Score: {result['score']:.2f})")
+    
+    # Speichere Debug-Log
+    processor.debug.save_debug_log()
+    rag_enhancer.debug.save_debug_log()
+    
+    print("\n✅ Debug-Session abgeschlossen!")
+    return result
 
 if __name__ == "__main__":
-    # Test der Klassen
-    print("🧪 DocumentProcessor Test")
-    processor = DocumentProcessor()
-    print(f"Unterstützte Dateitypen: {list(processor.supported_types.keys())}")
-    print(f"PDF verfügbar: {PDFPLUMBER_AVAILABLE or PYPDF2_AVAILABLE}")
-    print(f"DOCX verfügbar: {DOCX_AVAILABLE}")
+    # Beispiel-Nutzung
+    print("🚀 Fixed Document Processor mit Debugging gestartet")
+    
+    # Test mit einer Beispiel-Datei
+    test_file = "test_document.txt"
+    test_project = "af4aqupco"
+    test_db = {}
+    
+    # Erstelle Test-Datei falls nicht vorhanden
+    if not os.path.exists(test_file):
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("Dies ist ein Test-Dokument für das Debugging.\n\nEs enthält mehrere Absätze und Informationen.")
+        print(f"📝 Test-Datei erstellt: {test_file}")
+    
+    # Führe Debug-Test aus
+    asyncio.run(debug_document_processing(test_file, test_project, test_db))
