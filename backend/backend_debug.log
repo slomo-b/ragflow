@@ -1,0 +1,168 @@
+2025-07-13 01:11:11,818 - INFO - 1 change detected
+2025-07-13 01:11:12,612 - INFO - 5 changes detected
+2025-07-13 01:11:13,087 - INFO - 1 change detected
+2025-07-13 01:11:13,453 - INFO - 6 changes detected
+2025-07-13 01:11:13,817 - INFO - 5 changes detected
+2025-07-13 01:11:14,159 - WARNING - [WARNING] Document Processor not available - using fallback: No module named 'app.document_processor'
+2025-07-13 01:11:14,169 - INFO - [ROCKET] RagFlow Backend initialized
+2025-07-13 01:11:14,170 - INFO - [FOLDER] Upload directory: ./uploads
+2025-07-13 01:11:14,171 - INFO - [CONFIG] Environment: development
+2025-07-13 01:11:14,171 - INFO - [ROBOT] Document processor: Fallback mode
+2025-07-13 01:11:14,180 - INFO - 1 change detected
+2025-07-13 01:11:14,258 - INFO - [ROCKET] Starting RagFlow Backend...
+2025-07-13 01:11:14,260 - INFO - [OK] Loaded 3 projects
+2025-07-13 01:11:14,278 - INFO - [OK] Loaded 3 documents
+2025-07-13 01:11:14,295 - INFO - [OK] Loaded 28 chats
+2025-07-13 01:11:14,646 - INFO - 1 change detected
+2025-07-13 01:11:14,998 - INFO - 1 change detected
+2025-07-13 01:11:15,406 - INFO - 1 change detected
+2025-07-13 01:11:15,812 - INFO - 1 change detected
+2025-07-13 01:11:16,219 - INFO - 1 change detected
+2025-07-13 01:11:16,623 - INFO - 1 change detected
+2025-07-13 01:11:17,028 - INFO - 1 change detected
+2025-07-13 01:11:17,435 - INFO - 1 change detected
+2025-07-13 01:11:17,840 - INFO - 1 change detected
+2025-07-13 01:11:18,245 - INFO - 1 change detected
+2025-07-13 01:11:18,652 - INFO - 1 change detected
+2025-07-13 01:11:19,057 - INFO - 1 change detected
+2025-07-13 01:11:19,463 - INFO - 1 change detected
+2025-07-13 01:11:19,868 - INFO - 1 change detected
+2025-07-13 01:11:20,273 - INFO - 1 change detected
+2025-07-13 01:11:20,677 - INFO - 1 change detected
+2025-07-13 01:11:21,086 - INFO - 1 change detected
+2025-07-13 01:11:21,492 - INFO - 1 change detected
+2025-07-13 01:11:21,852 - INFO - 1 change detected
+2025-07-13 01:11:22,262 - INFO - 1 change detected
+2025-07-13 01:11:22,668 - INFO - 1 change detected
+2025-07-13 01:11:23,085 - INFO - 1 change detected
+2025-07-13 01:11:23,492 - INFO - 1 change detected
+2025-07-13 01:11:23,849 - INFO - 1 change detected
+2025-07-13 01:11:24,257 - INFO - 1 change detected
+2025-07-13 01:11:24,663 - INFO - 1 change detected
+2025-07-13 01:11:25,067 - INFO - 1 change detected
+2025-07-13 01:11:25,474 - INFO - 1 change detected
+2025-07-13 01:11:25,945 - INFO - [SAVE] Saving data before shutdown...
+2025-07-13 01:11:25,954 - INFO - [SAVE] Data saved successfully
+2025-07-13 01:11:25,954 - INFO - [WAVE] RagFlow Backend stopped
+2025-07-13 01:11:29,845 - WARNING - [WARNING] Document Processor not available - using fallback: No module named 'app.document_processor'
+2025-07-13 01:11:29,855 - INFO - [ROCKET] RagFlow Backend initialized
+2025-07-13 01:11:29,855 - INFO - [FOLDER] Upload directory: ./uploads
+2025-07-13 01:11:29,856 - INFO - [CONFIG] Environment: development
+2025-07-13 01:11:29,856 - INFO - [ROBOT] Document processor: Fallback mode
+2025-07-13 01:11:31,036 - WARNING - [WARNING] Document Processor not available - using fallback: No module named 'app.document_processor'
+2025-07-13 01:11:31,046 - INFO - [ROCKET] RagFlow Backend initialized
+2025-07-13 01:11:31,046 - INFO - [FOLDER] Upload directory: ./uploads
+2025-07-13 01:11:31,047 - INFO - [CONFIG] Environment: development
+2025-07-13 01:11:31,047 - INFO - [ROBOT] Document processor: Fallback mode
+2025-07-13 01:11:31,110 - INFO - [ROCKET] Starting RagFlow Backend...
+2025-07-13 01:11:31,113 - INFO - [OK] Loaded 3 projects
+2025-07-13 01:11:31,126 - INFO - [OK] Loaded 3 documents
+2025-07-13 01:11:31,139 - INFO - [OK] Loaded 28 chats
+2025-07-13 01:11:31,148 - INFO - 1 change detected
+2025-07-13 01:11:31,501 - INFO - 1 change detected
+2025-07-13 01:11:31,860 - INFO - 1 change detected
+2025-07-13 01:11:32,270 - INFO - 1 change detected
+2025-07-13 01:11:32,673 - INFO - 1 change detected
+2025-07-13 01:11:33,080 - INFO - 1 change detected
+2025-07-13 01:11:33,484 - INFO - 1 change detected
+2025-07-13 01:11:33,887 - INFO - 1 change detected
+2025-07-13 01:11:34,294 - INFO - 1 change detected
+2025-07-13 01:11:47,117 - INFO - 1 change detected
+2025-07-13 01:16:04,756 - INFO - 1 change detected
+2025-07-13 01:16:04,973 - INFO - [SAVE] Saving data before shutdown...
+2025-07-13 01:16:04,983 - INFO - [SAVE] Data saved successfully
+2025-07-13 01:16:04,983 - INFO - [WAVE] RagFlow Backend stopped
+2025-07-13 01:16:05,547 - INFO - 5 changes detected
+2025-07-13 01:16:05,974 - INFO - 1 change detected
+2025-07-13 01:16:06,341 - INFO - 5 changes detected
+2025-07-13 01:16:06,693 - INFO - 1 change detected
+2025-07-13 01:16:06,864 - WARNING - [WARNING] Document Processor not available - using fallback: No module named 'app.document_processor'
+2025-07-13 01:16:06,876 - INFO - [ROCKET] RagFlow Backend initialized
+2025-07-13 01:16:06,877 - INFO - [FOLDER] Upload directory: ./uploads
+2025-07-13 01:16:06,877 - INFO - [CONFIG] Environment: development
+2025-07-13 01:16:06,878 - INFO - [ROBOT] Document processor: Fallback mode
+2025-07-13 01:16:06,950 - INFO - [ROCKET] Starting RagFlow Backend...
+2025-07-13 01:16:06,953 - INFO - [OK] Loaded 3 projects
+2025-07-13 01:16:06,967 - INFO - [OK] Loaded 3 documents
+2025-07-13 01:16:06,980 - INFO - [OK] Loaded 28 chats
+2025-07-13 01:16:07,056 - INFO - 1 change detected
+2025-07-13 01:16:07,417 - INFO - 1 change detected
+2025-07-13 01:16:07,777 - INFO - 1 change detected
+2025-07-13 01:16:08,136 - INFO - 1 change detected
+2025-07-13 01:16:08,499 - INFO - 1 change detected
+2025-07-13 01:16:08,854 - INFO - 1 change detected
+2025-07-13 01:16:09,261 - INFO - 1 change detected
+2025-07-13 01:16:09,666 - INFO - 1 change detected
+2025-07-13 01:16:10,076 - INFO - 1 change detected
+2025-07-13 01:16:10,252 - INFO - [REQUEST] GET http://localhost:8000/api/health
+2025-07-13 01:16:10,253 - INFO - [RESPONSE] 200 - 0.002s
+2025-07-13 01:16:10,478 - INFO - 1 change detected
+2025-07-13 01:16:10,886 - INFO - 1 change detected
+2025-07-13 01:16:11,241 - INFO - 1 change detected
+2025-07-13 01:16:11,649 - INFO - 1 change detected
+2025-07-13 01:16:12,055 - INFO - 1 change detected
+2025-07-13 01:16:12,461 - INFO - 1 change detected
+2025-07-13 01:16:12,862 - INFO - 1 change detected
+2025-07-13 01:16:13,268 - INFO - 1 change detected
+2025-07-13 01:16:13,674 - INFO - 1 change detected
+2025-07-13 01:16:14,077 - INFO - 1 change detected
+2025-07-13 01:16:14,482 - INFO - 1 change detected
+2025-07-13 01:16:14,889 - INFO - 1 change detected
+2025-07-13 01:16:15,292 - INFO - 1 change detected
+2025-07-13 01:16:15,695 - INFO - 1 change detected
+2025-07-13 01:16:16,102 - INFO - 1 change detected
+2025-07-13 01:16:16,507 - INFO - 1 change detected
+2025-07-13 01:16:16,914 - INFO - 1 change detected
+2025-07-13 01:16:17,320 - INFO - 1 change detected
+2025-07-13 01:16:17,725 - INFO - 1 change detected
+2025-07-13 01:16:18,130 - INFO - 1 change detected
+2025-07-13 01:16:18,323 - INFO - [SAVE] Saving data before shutdown...
+2025-07-13 01:16:18,332 - INFO - [SAVE] Data saved successfully
+2025-07-13 01:16:18,332 - INFO - [WAVE] RagFlow Backend stopped
+2025-07-13 01:16:21,535 - WARNING - [WARNING] Document Processor not available - using fallback: No module named 'app.document_processor'
+2025-07-13 01:16:21,547 - INFO - [ROCKET] RagFlow Backend initialized
+2025-07-13 01:16:21,547 - INFO - [FOLDER] Upload directory: ./uploads
+2025-07-13 01:16:21,548 - INFO - [CONFIG] Environment: development
+2025-07-13 01:16:21,549 - INFO - [ROBOT] Document processor: Fallback mode
+2025-07-13 01:16:22,767 - WARNING - [WARNING] Document Processor not available - using fallback: No module named 'app.document_processor'
+2025-07-13 01:16:22,778 - INFO - [ROCKET] RagFlow Backend initialized
+2025-07-13 01:16:22,778 - INFO - [FOLDER] Upload directory: ./uploads
+2025-07-13 01:16:22,779 - INFO - [CONFIG] Environment: development
+2025-07-13 01:16:22,779 - INFO - [ROBOT] Document processor: Fallback mode
+2025-07-13 01:16:22,844 - INFO - [ROCKET] Starting RagFlow Backend...
+2025-07-13 01:16:22,847 - INFO - [OK] Loaded 3 projects
+2025-07-13 01:16:22,860 - INFO - [OK] Loaded 3 documents
+2025-07-13 01:16:22,874 - INFO - [OK] Loaded 28 chats
+2025-07-13 01:16:22,878 - INFO - 1 change detected
+2025-07-13 01:16:23,244 - INFO - 1 change detected
+2025-07-13 01:16:23,605 - INFO - 1 change detected
+2025-07-13 01:16:24,013 - INFO - 1 change detected
+2025-07-13 01:16:24,418 - INFO - 1 change detected
+2025-07-13 01:16:24,824 - INFO - 1 change detected
+2025-07-13 01:16:25,231 - INFO - 1 change detected
+2025-07-13 01:16:25,633 - INFO - 1 change detected
+2025-07-13 01:16:26,045 - INFO - 1 change detected
+2025-07-13 01:16:26,450 - INFO - 1 change detected
+2025-07-13 01:16:26,855 - INFO - 1 change detected
+2025-07-13 01:16:27,258 - INFO - 1 change detected
+2025-07-13 01:16:27,664 - INFO - 1 change detected
+2025-07-13 01:16:28,068 - INFO - 1 change detected
+2025-07-13 01:16:28,473 - INFO - 1 change detected
+2025-07-13 01:16:28,879 - INFO - 1 change detected
+2025-07-13 01:16:29,282 - INFO - 1 change detected
+2025-07-13 01:16:29,640 - INFO - 1 change detected
+2025-07-13 01:16:30,053 - INFO - 1 change detected
+2025-07-13 01:16:30,454 - INFO - 1 change detected
+2025-07-13 01:16:30,860 - INFO - 1 change detected
+2025-07-13 01:16:31,264 - INFO - 1 change detected
+2025-07-13 01:16:31,669 - INFO - 1 change detected
+2025-07-13 01:16:32,072 - INFO - 1 change detected
+2025-07-13 01:16:32,477 - INFO - 1 change detected
+2025-07-13 01:16:32,885 - INFO - 1 change detected
+2025-07-13 01:16:33,290 - INFO - 1 change detected
+2025-07-13 01:16:33,645 - INFO - 1 change detected
+2025-07-13 01:16:34,056 - INFO - 1 change detected
+2025-07-13 01:16:34,460 - INFO - 1 change detected
+2025-07-13 01:16:34,864 - INFO - 1 change detected
+2025-07-13 01:16:35,269 - INFO - 1 change detected
+2025-07-13 01:16:38,974 - INFO - [REQUEST] GET http://localhost:8000/api/health
