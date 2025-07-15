@@ -1,126 +1,201 @@
+# backend/app/config.py
 """
-Working Configuration for RagFlow Backend
-Fixes all Pydantic validation issues
+RagFlow Backend Configuration
+Zentrale Konfiguration für das Backend-System
 """
 
-from pydantic_settings import BaseSettings
-from pydantic import Field, ConfigDict
-from typing import List, Optional
 import os
 from pathlib import Path
-
+from typing import Optional
+from pydantic import BaseSettings, Field
 
 class Settings(BaseSettings):
-    """Application settings with proper Pydantic configuration"""
+    """Application settings"""
     
-    # Pydantic configuration - ALLOW extra fields from .env
-    model_config = ConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        extra="ignore"  # This fixes the "extra inputs not permitted" error
+    # API Configuration
+    API_VERSION: str = "v1"
+    API_PREFIX: str = f"/api/{API_VERSION}"
+    
+    # Google AI Configuration
+    GOOGLE_API_KEY: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
+    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", env="GEMINI_MODEL")
+    
+    # File Upload Configuration
+    MAX_FILE_SIZE: int = Field(default=50 * 1024 * 1024, env="MAX_FILE_SIZE")  # 50MB
+    ALLOWED_FILE_TYPES: list = [".pdf", ".docx", ".doc", ".txt", ".md"]
+    UPLOAD_DIR: str = Field(default="./uploads", env="UPLOAD_DIR")
+    
+    # Data Storage Configuration
+    DATA_DIR: str = Field(default="./data", env="DATA_DIR")
+    
+    # RAG Configuration
+    RAG_CHUNK_SIZE: int = Field(default=500, env="RAG_CHUNK_SIZE")
+    RAG_CHUNK_OVERLAP: int = Field(default=50, env="RAG_CHUNK_OVERLAP")
+    RAG_TOP_K: int = Field(default=5, env="RAG_TOP_K")
+    RAG_MIN_SIMILARITY: float = Field(default=0.1, env="RAG_MIN_SIMILARITY")
+    
+    # Search Configuration
+    TFIDF_MAX_FEATURES: int = Field(default=5000, env="TFIDF_MAX_FEATURES")
+    SEMANTIC_MIN_SIMILARITY: float = Field(default=0.2, env="SEMANTIC_MIN_SIMILARITY")
+    
+    # Chat Configuration
+    CHAT_MAX_CONTEXT_LENGTH: int = Field(default=8000, env="CHAT_MAX_CONTEXT_LENGTH")
+    CHAT_TEMPERATURE: float = Field(default=0.7, env="CHAT_TEMPERATURE")
+    
+    # Logging Configuration
+    LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
+    LOG_FILE: str = Field(default="ragflow_backend.log", env="LOG_FILE")
+    
+    # CORS Configuration
+    CORS_ORIGINS: list = Field(
+        default=["http://localhost:3000", "http://localhost:5173"],
+        env="CORS_ORIGINS"
     )
     
-    # === Core Configuration ===
-    API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "RagFlow"
-    VERSION: str = "2.0.0"
+    # Development Configuration
+    DEBUG: bool = Field(default=False, env="DEBUG")
+    RELOAD: bool = Field(default=False, env="RELOAD")
     
-    # === Environment ===
-    ENVIRONMENT: str = Field(default="development")
-    DEBUG: bool = Field(default=True)
-    
-    # === Security ===
-    SECRET_KEY: str = Field(default="your_super_secret_key_here_change_this_in_production")
-    ALGORITHM: str = Field(default="HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
-    
-    # === Google AI ===
-    GOOGLE_API_KEY: str = Field(default="", description="Google AI API Key")
-    GEMINI_MODEL: str = Field(default="gemini-1.5-flash")
-    EMBEDDING_MODEL: str = Field(default="models/embedding-001")
-    TEMPERATURE: float = Field(default=0.7, ge=0.0, le=2.0)
-    MAX_TOKENS: int = Field(default=1024, ge=1, le=4096)
-    
-    # === Database ===
-    DATABASE_URL: str = Field(default="sqlite:///./data/rag_database.db")
-    DATABASE_ECHO: bool = Field(default=False)
-    
-    # === File Upload ===
-    MAX_FILE_SIZE: int = Field(default=524288000)  # 10MB
-    UPLOAD_DIRECTORY: str = Field(default="./uploads")
-    
-    # === RAG Configuration ===
-    CHUNK_SIZE: int = Field(default=1000, ge=100, le=2000)
-    CHUNK_OVERLAP: int = Field(default=200, ge=0, le=500)
-    SIMILARITY_THRESHOLD: float = Field(default=0.7, ge=0.0, le=1.0)
-    MAX_SEARCH_RESULTS: int = Field(default=10, ge=1, le=50)
-    
-    # === Logging ===
-    LOG_LEVEL: str = Field(default="INFO")
-    LOG_FORMAT: str = Field(default="text")
-    
-    # === Performance ===
-    WORKERS: int = Field(default=1, ge=1)
-    MAX_REQUESTS: int = Field(default=1000, ge=100)
-    TIMEOUT_KEEP_ALIVE: int = Field(default=5, ge=1)
-    
-    # === Rate Limiting ===
-    RATE_LIMIT_REQUESTS_PER_MINUTE: int = Field(default=60)
-    CHAT_RATE_LIMIT: int = Field(default=20)
-    UPLOAD_RATE_LIMIT: int = Field(default=50)
-    
-    # === Fixed Lists (as properties to avoid JSON parsing issues) ===
-    @property
-    def ALLOWED_EXTENSIONS(self) -> List[str]:
-        """Get allowed file extensions"""
-        return [".pdf", ".docx", ".txt", ".md"]
-    
-    @property
-    def ALLOWED_ORIGINS(self) -> List[str]:
-        """Get allowed CORS origins"""
-        return [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:8000",
-            "http://127.0.0.1:8000"
-        ]
-    
-    @property 
-    def ALLOWED_METHODS(self) -> List[str]:
-        """Get allowed HTTP methods"""
-        return ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    
-    @property
-    def ALLOWED_HEADERS(self) -> List[str]:
-        """Get allowed headers"""
-        return ["*"]
-    
-    def create_directories(self):
-        """Create necessary directories"""
-        Path(self.UPLOAD_DIRECTORY).mkdir(parents=True, exist_ok=True)
-        Path("./data").mkdir(parents=True, exist_ok=True)
-        Path("./logs").mkdir(parents=True, exist_ok=True)
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = True
 
-
-# Create settings instance
+# Global settings instance
 settings = Settings()
 
-# Create directories
-settings.create_directories()
+# Environment validation
+def validate_environment():
+    """Validate required environment variables and settings"""
+    errors = []
+    warnings = []
+    
+    # Check Google AI API Key
+    if not settings.GOOGLE_API_KEY:
+        warnings.append("GOOGLE_API_KEY not set - AI features will be limited")
+    
+    # Check directories
+    upload_dir = Path(settings.UPLOAD_DIR)
+    data_dir = Path(settings.DATA_DIR)
+    
+    try:
+        upload_dir.mkdir(exist_ok=True)
+        data_dir.mkdir(exist_ok=True)
+    except Exception as e:
+        errors.append(f"Cannot create directories: {e}")
+    
+    # Check file size limits
+    if settings.MAX_FILE_SIZE > 100 * 1024 * 1024:  # 100MB
+        warnings.append("MAX_FILE_SIZE is very large - may cause performance issues")
+    
+    # Check RAG settings
+    if settings.RAG_CHUNK_SIZE < 100:
+        warnings.append("RAG_CHUNK_SIZE is very small - may affect search quality")
+    
+    if settings.RAG_CHUNK_OVERLAP >= settings.RAG_CHUNK_SIZE:
+        errors.append("RAG_CHUNK_OVERLAP must be smaller than RAG_CHUNK_SIZE")
+    
+    return errors, warnings
 
-# Validate critical settings and show helpful messages
-print("🔧 RagFlow Configuration Loaded:")
-print(f"   Environment: {settings.ENVIRONMENT}")
-print(f"   Database: {settings.DATABASE_URL}")
-print(f"   Upload Directory: {settings.UPLOAD_DIRECTORY}")
+# Model and feature availability
+class FeatureFlags:
+    """Feature availability flags"""
+    
+    def __init__(self):
+        self.google_ai_available = bool(settings.GOOGLE_API_KEY)
+        self.sentence_transformers_available = self._check_sentence_transformers()
+        self.pdf_processing_available = self._check_pdf_processing()
+        self.docx_processing_available = self._check_docx_processing()
+    
+    def _check_sentence_transformers(self) -> bool:
+        try:
+            import sentence_transformers
+            return True
+        except ImportError:
+            return False
+    
+    def _check_pdf_processing(self) -> bool:
+        try:
+            import PyPDF2
+            return True
+        except ImportError:
+            try:
+                import pdfplumber
+                return True
+            except ImportError:
+                return False
+    
+    def _check_docx_processing(self) -> bool:
+        try:
+            import docx
+            return True
+        except ImportError:
+            return False
+    
+    def get_status_dict(self) -> dict:
+        return {
+            "google_ai": self.google_ai_available,
+            "sentence_transformers": self.sentence_transformers_available,
+            "pdf_processing": self.pdf_processing_available,
+            "docx_processing": self.docx_processing_available
+        }
 
-if not settings.GOOGLE_API_KEY or settings.GOOGLE_API_KEY == "your_google_ai_api_key_here":
-    print("⚠️  WARNING: GOOGLE_API_KEY not set!")
-    print("   🔑 Get your API key at: https://ai.google.dev")
-    print("   📝 Add it to your .env file: GOOGLE_API_KEY=your_actual_key")
-else:
-    print(f"✅ Google API Key configured (length: {len(settings.GOOGLE_API_KEY)})")
+# Global feature flags
+feature_flags = FeatureFlags()
 
-print(f"💾 Allowed file types: {', '.join(settings.ALLOWED_EXTENSIONS)}")
-print(f"📁 Max file size: {settings.MAX_FILE_SIZE / (1024*1024):.1f} MB")
+# Development utilities
+def get_development_config():
+    """Get configuration for development environment"""
+    return {
+        "debug": True,
+        "reload": True,
+        "log_level": "DEBUG",
+        "cors_origins": ["*"],  # Allow all origins in development
+    }
+
+def get_production_config():
+    """Get configuration for production environment"""
+    return {
+        "debug": False,
+        "reload": False,
+        "log_level": "INFO",
+        "cors_origins": settings.CORS_ORIGINS,
+    }
+
+# Configuration summary
+def print_config_summary():
+    """Print configuration summary for debugging"""
+    print("\n" + "="*50)
+    print("RagFlow Backend Configuration")
+    print("="*50)
+    
+    print(f"Google AI Key: {'✓ Set' if settings.GOOGLE_API_KEY else '✗ Not set'}")
+    print(f"Model: {settings.GEMINI_MODEL}")
+    print(f"Upload Dir: {settings.UPLOAD_DIR}")
+    print(f"Data Dir: {settings.DATA_DIR}")
+    print(f"Max File Size: {settings.MAX_FILE_SIZE / (1024*1024):.1f} MB")
+    print(f"RAG Chunk Size: {settings.RAG_CHUNK_SIZE}")
+    print(f"Debug Mode: {settings.DEBUG}")
+    
+    print("\nFeature Availability:")
+    status = feature_flags.get_status_dict()
+    for feature, available in status.items():
+        print(f"  {feature}: {'✓' if available else '✗'}")
+    
+    # Validation
+    errors, warnings = validate_environment()
+    
+    if warnings:
+        print("\nWarnings:")
+        for warning in warnings:
+            print(f"  ⚠️  {warning}")
+    
+    if errors:
+        print("\nErrors:")
+        for error in errors:
+            print(f"  ❌ {error}")
+    
+    print("="*50 + "\n")
+
+if __name__ == "__main__":
+    print_config_summary()
