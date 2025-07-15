@@ -1,12 +1,21 @@
-'use client'
-
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, Sparkles, Copy, Check, StopCircle } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/Badge'
-import { useStore } from '@/stores/useStore'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  Send, 
+  StopCircle, 
+  Sparkles, 
+  Copy, 
+  Check, 
+  MessageSquare,
+  FileText,
+  User,
+  Bot
+} from 'lucide-react'
+import { Button } from "@/components/ui/Button"
+import { Badge } from "@/components/ui/Badge"
 import { cn } from '@/lib/utils'
+import { useStore } from '@/stores/useStore'
+import toast from 'react-hot-toast'
 
 interface Message {
   id: string
@@ -14,78 +23,139 @@ interface Message {
   role: 'user' | 'assistant'
   timestamp: string
   sources?: Array<{
+    id: string
     name: string
-    relevance_score: number
     excerpt: string
+    relevance_score: number
   }>
 }
 
-// Clean Message Component
-const MessageBubble = ({ message, isLatest }: { message: Message; isLatest?: boolean }) => {
+// Chat API Service
+class ChatAPI {
+  static async sendMessage(content: string, projectId?: string) {
+    console.log('Sending chat message:', { content, projectId })
+    
+    const payload = {
+      message: content,
+      project_id: projectId || null,
+      use_documents: !!projectId
+    }
+    
+    console.log('Chat API payload:', payload)
+    
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
+      
+      console.log('Chat response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Chat API error:', errorText)
+        throw new Error(`Chat failed: ${response.status} ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      console.log('Chat API result:', result)
+      return result
+    } catch (error) {
+      console.error('Chat API error:', error)
+      throw error
+    }
+  }
+  
+  static async getChatHistory(projectId?: string) {
+    const params = new URLSearchParams()
+    if (projectId) {
+      params.append('project_id', projectId)
+    }
+    
+    const response = await fetch(`http://localhost:8000/api/v1/chats/?${params}`)
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch chat history: ${response.statusText}`)
+    }
+    
+    return response.json()
+  }
+}
+
+// Message Component
+const MessageComponent = ({ message }: { message: Message }) => {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
 
   const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(message.content)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
-
-  // Safe date formatting
-  const formatTime = (dateString: string) => {
-    try {
-      const date = new Date(dateString)
-      if (isNaN(date.getTime())) {
-        return 'Now'
-      }
-      return new Intl.DateTimeFormat('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(date)
-    } catch {
-      return 'Now'
-    }
+    await navigator.clipboard.writeText(message.content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
-    <div className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start')}>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className={cn(
+        "flex w-full",
+        isUser ? "justify-end" : "justify-start"
+      )}
+    >
       <div className={cn(
-        'max-w-[80%] group relative',
-        isUser ? 'order-2' : 'order-1'
+        "max-w-[70%] rounded-2xl px-4 py-3 shadow-sm",
+        isUser 
+          ? "bg-blue-600 text-white" 
+          : "bg-white border border-gray-200"
       )}>
         {/* Message Header */}
-        <div className={cn(
-          'flex items-center mb-2 text-xs text-gray-500',
-          isUser ? 'justify-end' : 'justify-start'
-        )}>
-          <span className="font-medium">
-            {isUser ? 'You' : 'AI Assistant'}
+        <div className="flex items-center gap-2 mb-2">
+          <div className={cn(
+            "w-6 h-6 rounded-full flex items-center justify-center",
+            isUser ? "bg-blue-500" : "bg-gray-100"
+          )}>
+            {isUser ? (
+              <User size={12} className="text-white" />
+            ) : (
+              <Bot size={12} className="text-gray-600" />
+            )}
+          </div>
+          <span className={cn(
+            "text-xs font-medium",
+            isUser ? "text-blue-100" : "text-gray-600"
+          )}>
+            {isUser ? "You" : "AI Assistant"}
           </span>
-          <span className="mx-2">•</span>
-          <span>{formatTime(message.timestamp)}</span>
+          <span className={cn(
+            "text-xs",
+            isUser ? "text-blue-200" : "text-gray-400"
+          )}>
+            {new Date(message.timestamp).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </span>
         </div>
 
-        {/* Message Bubble */}
+        {/* Message Content */}
         <div className={cn(
-          'relative px-4 py-3 rounded-2xl shadow-sm border',
-          isUser
-            ? 'bg-blue-600 text-white border-blue-600'
-            : 'bg-white text-gray-900 border-gray-200'
+          "text-sm leading-relaxed whitespace-pre-wrap",
+          isUser ? "text-white" : "text-gray-900"
         )}>
-          <div className="whitespace-pre-wrap break-words">
-            {message.content}
-          </div>
+          {message.content}
+        </div>
 
-          {/* Copy Button */}
+        {/* Copy Button */}
+        <div className="flex justify-end mt-2">
           <button
             onClick={copyToClipboard}
             className={cn(
-              'absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity',
-              isUser 
+              "p-1 rounded transition-colors",
+              isUser
                 ? 'text-blue-200 hover:text-white hover:bg-blue-700' 
                 : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
             )}
@@ -105,7 +175,8 @@ const MessageBubble = ({ message, isLatest }: { message: Message; isLatest?: boo
                 className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium text-gray-900 truncate">
+                  <span className="font-medium text-gray-900 truncate flex items-center gap-1">
+                    <FileText size={12} />
                     {source.name}
                   </span>
                   <span className="text-xs text-gray-500">
@@ -120,7 +191,7 @@ const MessageBubble = ({ message, isLatest }: { message: Message; isLatest?: boo
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -128,14 +199,18 @@ const MessageBubble = ({ message, isLatest }: { message: Message; isLatest?: boo
 const TypingIndicator = () => (
   <div className="flex justify-start">
     <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm">
-      <div className="flex space-x-1">
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-            style={{ animationDelay: `${i * 0.2}s` }}
-          />
-        ))}
+      <div className="flex items-center gap-2">
+        <Bot size={16} className="text-gray-600" />
+        <div className="flex space-x-1">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              style={{ animationDelay: `${i * 0.2}s` }}
+            />
+          ))}
+        </div>
+        <span className="text-xs text-gray-500">AI is thinking...</span>
       </div>
     </div>
   </div>
@@ -219,9 +294,39 @@ export function ChatInterface() {
     scrollToBottom()
   }, [messages])
 
+  // Handle suggestion clicks
+  const handleSuggestionClick = (suggestion: string) => {
+    setMessage(suggestion)
+    if (textAreaRef.current) {
+      textAreaRef.current.focus()
+    }
+  }
+
+  // Auto-resize textarea
+  const adjustTextareaHeight = () => {
+    if (textAreaRef.current) {
+      textAreaRef.current.style.height = 'auto'
+      textAreaRef.current.style.height = `${Math.min(textAreaRef.current.scrollHeight, 120)}px`
+    }
+  }
+
+  useEffect(() => {
+    adjustTextareaHeight()
+  }, [message])
+
+  // Handle key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
   // Send message handler
   const handleSendMessage = async () => {
     if (!message.trim() || isLoading) return
+
+    console.log('Sending message with project:', currentProject)
 
     const userMessage: Message = {
       id: Math.random().toString(36),
@@ -240,60 +345,45 @@ export function ChatInterface() {
     }
 
     try {
-      // Create or update chat in store
-      let chatId = currentChatId
-      if (!chatId && currentProject) {
-        // Create new chat
-        const newChatData = {
-          title: message.trim().slice(0, 50) + (message.trim().length > 50 ? '...' : ''),
-          projectId: currentProject.id,
-          messages: [userMessage]
-        }
-        
-        // This would be handled by the store, but we simulate it
-        chatId = Math.random().toString(36)
-        setCurrentChatId(chatId)
-        
-        addChat(newChatData)
+      // Send to backend with correct project_id
+      const response = await ChatAPI.sendMessage(
+        userMessage.content, 
+        currentProject?.id // This is the key fix!
+      )
+
+      const aiMessage: Message = {
+        id: Math.random().toString(36),
+        content: response.response || 'Sorry, I could not generate a response.',
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+        sources: response.sources || []
       }
 
-      // Simulate API call to backend
-      const response = await fetch('http://localhost:8000/api/v1/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
-          project_id: currentProject?.id || null
-        })
-      })
+      setMessages(prev => [...prev, aiMessage])
 
-      if (response.ok) {
-        const data = await response.json()
-        
-        const aiMessage: Message = {
-          id: Math.random().toString(36),
-          content: data.response || 'Sorry, I could not generate a response.',
-          role: 'assistant',
-          timestamp: new Date().toISOString(),
-          sources: data.sources || []
-        }
+      // Show success if sources were found
+      if (response.sources && response.sources.length > 0) {
+        toast.success(`Found ${response.sources.length} relevant document(s)`)
+      }
 
-        setMessages(prev => [...prev, aiMessage])
-
-        // Update chat in store
-        if (chatId && currentProject) {
-          updateChat(chatId, {
+      // Create or update chat in store
+      if (currentProject) {
+        if (!currentChatId) {
+          const newChatData = {
+            title: userMessage.content.slice(0, 50) + (userMessage.content.length > 50 ? '...' : ''),
+            projectId: currentProject.id,
+            messages: [userMessage, aiMessage]
+          }
+          
+          const chatId = Math.random().toString(36)
+          setCurrentChatId(chatId)
+          addChat(newChatData)
+        } else {
+          updateChat(currentChatId, {
             messages: [...messages, userMessage, aiMessage],
             updatedAt: new Date().toISOString()
           })
         }
-      } else {
-        throw new Error('Failed to get response from server')
       }
       
     } catch (error) {
@@ -301,128 +391,91 @@ export function ChatInterface() {
       
       const errorMessage: Message = {
         id: Math.random().toString(36),
-        content: 'Sorry, there was an error processing your request. Please make sure the backend is running.',
+        content: `Sorry, there was an error: ${error.message}. Please make sure the backend is running and documents are properly uploaded.`,
         role: 'assistant',
         timestamp: new Date().toISOString()
       }
       
       setMessages(prev => [...prev, errorMessage])
+      toast.error(`Chat error: ${error.message}`)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Stop generation
+  // Stop generation (placeholder)
   const stopGeneration = () => {
     setIsLoading(false)
   }
 
-  // Handle keyboard shortcuts
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
-    }
-  }
-
-  // Handle input change with auto-resize
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(e.target.value)
-    
-    // Auto-resize textarea
-    const textarea = e.target
-    textarea.style.height = 'auto'
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
-  }
-
-  // Handle suggestion click
-  const handleSuggestionClick = (suggestion: string) => {
-    setMessage(suggestion)
-    textAreaRef.current?.focus()
-  }
-
-  // Clear chat
-  const clearChat = () => {
-    setMessages([])
-    setCurrentChatId(null)
-  }
-
-  const isEmpty = messages.length === 0
-
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gradient-to-br from-gray-50 to-white">
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-200">
+      <div className="flex-shrink-0 p-4 bg-white border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <Sparkles className="h-5 w-5 text-white" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl">
+              <MessageSquare className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">AI Assistant</h1>
+              <h1 className="text-lg font-semibold text-gray-900">
+                AI Chat Assistant
+              </h1>
               <p className="text-sm text-gray-600">
                 {currentProject 
-                  ? `Working on: ${currentProject.name}` 
-                  : 'Ready to help with your documents'
+                  ? `Project: ${currentProject.name} • ${currentProject.document_count || 0} documents`
+                  : 'No project selected'
                 }
               </p>
             </div>
           </div>
           
-          {!isEmpty && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearChat}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              Clear Chat
-            </Button>
+          {currentProject && (
+            <Badge variant="secondary" className="text-xs">
+              {currentProject.document_count || 0} docs available
+            </Badge>
           )}
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        {isEmpty ? (
-          <div className="flex-1 flex items-center justify-center min-h-0">
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto">
+          {messages.length === 0 ? (
             <WelcomeScreen onSuggestionClick={handleSuggestionClick} />
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
-              {messages.map((msg, index) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  isLatest={index === messages.length - 1}
-                />
-              ))}
+          ) : (
+            <div className="p-4 space-y-4">
+              <AnimatePresence>
+                {messages.map((msg) => (
+                  <MessageComponent key={msg.id} message={msg} />
+                ))}
+              </AnimatePresence>
               
               {isLoading && <TypingIndicator />}
+              
               <div ref={messagesEndRef} />
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white">
-        <div className="max-w-4xl mx-auto px-6 py-6">
+      <div className="flex-shrink-0 p-4 bg-white border-t border-gray-200">
+        <div className="max-w-4xl mx-auto">
           <div className="relative">
             {/* Input Container */}
-            <div className="relative bg-gray-50 border border-gray-200 rounded-2xl focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
-              <Textarea
+            <div className="relative bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+              <textarea
                 ref={textAreaRef}
                 value={message}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={handleKeyPress}
                 placeholder={
                   currentProject?.document_count && currentProject.document_count > 0
                     ? "Ask a question about your documents..."
                     : "Ask me anything..."
                 }
-                className="min-h-[56px] max-h-[120px] py-4 pl-6 pr-16 text-base resize-none border-0 bg-transparent focus:ring-0 focus:outline-none placeholder:text-gray-500"
+                className="min-h-[56px] max-h-[120px] py-4 pl-6 pr-16 text-base resize-none border-0 bg-transparent focus:ring-0 focus:outline-none placeholder:text-gray-500 w-full"
                 disabled={isLoading}
                 rows={1}
               />
@@ -453,14 +506,14 @@ export function ChatInterface() {
               </div>
             </div>
 
-            {/* Helper Text & Project Badge */}
+            {/* Helper Text */}
             <div className="flex items-center justify-between mt-3 px-2">
               <span className="text-xs text-gray-500">
                 Press Enter to send, Shift+Enter for new line
               </span>
               {currentProject?.document_count && currentProject.document_count > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {currentProject.document_count} document{currentProject.document_count !== 1 ? 's' : ''} available
+                <Badge variant="outline" className="text-xs">
+                  RAG enabled
                 </Badge>
               )}
             </div>

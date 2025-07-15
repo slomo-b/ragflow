@@ -1,6 +1,4 @@
-'use client'
-
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   DocumentTextIcon,
@@ -47,30 +45,216 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useStore } from '@/stores/useStore'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
+// API Service
+const API_BASE = 'http://localhost:8000'
+
+class DocumentAPI {
+  static async uploadDocuments(files: FileList | File[], projectId: string) {
+    console.log('Starting upload...', { fileCount: files.length, projectId })
+    
+    const formData = new FormData()
+    
+    Array.from(files).forEach((file, index) => {
+      console.log(`Adding file ${index + 1}:`, file.name, file.type, file.size)
+      formData.append('files', file)
+    })
+    
+    formData.append('project_id', projectId)
+    
+    // Debug FormData contents
+    console.log('FormData contents:')
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value)
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/upload/documents`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      console.log('Response status:', response.status)
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Upload error response:', errorText)
+        throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`)
+      }
+      
+      const result = await response.json()
+      console.log('Upload success:', result)
+      return result
+    } catch (error) {
+      console.error('Upload fetch error:', error)
+      throw error
+    }
+  }
+  
+  static async getDocuments(projectId?: string, skip = 0, limit = 100) {
+    const params = new URLSearchParams({
+      skip: skip.toString(),
+      limit: limit.toString(),
+    })
+    
+    if (projectId) {
+      params.append('project_id', projectId)
+    }
+    
+    console.log('Fetching documents with params:', Object.fromEntries(params))
+    
+    const response = await fetch(`${API_BASE}/api/v1/documents/?${params}`)
+    
+    console.log('Documents response status:', response.status)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Documents fetch error:', errorText)
+      throw new Error(`Failed to fetch documents: ${response.status} ${response.statusText}`)
+    }
+    
+    const result = await response.json()
+    console.log('Documents result:', result)
+    return result
+  }
+  
+  static async deleteDocument(documentId: string) {
+    console.log('Deleting document:', documentId)
+    
+    const response = await fetch(`${API_BASE}/api/v1/documents/${documentId}`, {
+      method: 'DELETE',
+    })
+    
+    console.log('Delete response status:', response.status)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Delete error:', errorText)
+      throw new Error(`Delete failed: ${response.status} ${response.statusText}`)
+    }
+    
+    const result = await response.json()
+    console.log('Delete result:', result)
+    return result
+  }
+  
+  static async getProjects() {
+    console.log('Fetching projects...')
+    
+    const response = await fetch(`${API_BASE}/api/v1/projects/`)
+    
+    console.log('Projects response status:', response.status)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Projects fetch error:', errorText)
+      throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`)
+    }
+    
+    const result = await response.json()
+    console.log('Projects result:', result)
+    return result
+  }
+  
+  static async createProject(name: string, description = '') {
+    const response = await fetch(`${API_BASE}/api/v1/projects/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, description }),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Project creation failed: ${response.statusText}`)
+    }
+    
+    return response.json()
+  }
+}
+
 export function DocumentLibrary() {
+  const [documents, setDocuments] = useState([])
+  const [projects, setProjects] = useState([])
+  const [currentProject, setCurrentProject] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('all')
   const [sortBy, setSortBy] = useState('uploadedAt')
   const [isUploading, setIsUploading] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null)
+  const [documentToDelete, setDocumentToDelete] = useState(null)
   const [isDragOver, setIsDragOver] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  
-  const { documents, addDocument, deleteDocument, currentProject } = useStore()
+  const fileInputRef = useRef(null)
 
-  // Filtere Dokumente nach aktuellem Projekt
-  const projectDocuments = React.useMemo(() => {
-    if (!currentProject) return []
-    return documents.filter(doc => doc.projectId === currentProject.id)
-  }, [documents, currentProject])
+  // Load initial data
+  useEffect(() => {
+    loadInitialData()
+  }, [])
+
+  // Load documents when project changes
+  useEffect(() => {
+    if (currentProject) {
+      loadDocuments()
+    }
+  }, [currentProject])
+
+  const loadInitialData = async () => {
+    console.log('Loading initial data...')
+    
+    try {
+      setLoading(true)
+      const projectsData = await DocumentAPI.getProjects()
+      console.log('Loaded projects:', projectsData)
+      
+      setProjects(projectsData.projects || [])
+      
+      if (projectsData.projects && projectsData.projects.length > 0) {
+        console.log('Setting current project to:', projectsData.projects[0])
+        setCurrentProject(projectsData.projects[0])
+      } else {
+        console.log('No projects found, creating default project...')
+        // Create a default project if none exist
+        try {
+          const defaultProject = await DocumentAPI.createProject('My Documents', 'Default project for documents')
+          console.log('Created default project:', defaultProject)
+          setProjects([defaultProject])
+          setCurrentProject(defaultProject)
+        } catch (createError) {
+          console.error('Failed to create default project:', createError)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load initial data:', error)
+      toast.error(`Failed to load projects: ${error.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadDocuments = async () => {
+    if (!currentProject) {
+      console.log('No current project, skipping document load')
+      return
+    }
+    
+    console.log('Loading documents for project:', currentProject.id)
+    
+    try {
+      const documentsData = await DocumentAPI.getDocuments(currentProject.id)
+      console.log('Loaded documents:', documentsData)
+      setDocuments(documentsData.documents || [])
+    } catch (error) {
+      console.error('Failed to load documents:', error)
+      toast.error(`Failed to load documents: ${error.message}`)
+    }
+  }
 
   // Status-spezifische Konfiguration
-  const getStatusConfig = (status: string) => {
+  const getStatusConfig = (status) => {
     switch (status) {
       case 'completed':
         return {
@@ -97,92 +281,80 @@ export function DocumentLibrary() {
           bgColor: 'bg-red-50 dark:bg-red-900/20',
           borderColor: 'border-red-200 dark:border-red-800',
           label: 'Failed',
-          description: 'Processing error'
+          description: 'Processing failed'
         }
       default:
         return {
-          icon: ClockIcon,
-          color: 'text-gray-500',
-          bgColor: 'bg-gray-50 dark:bg-gray-900/20',
-          borderColor: 'border-gray-200 dark:border-gray-800',
+          icon: DocumentTextSolidIcon,
+          color: 'text-slate-500',
+          bgColor: 'bg-slate-50 dark:bg-slate-900/20',
+          borderColor: 'border-slate-200 dark:border-slate-800',
           label: 'Uploaded',
-          description: 'Waiting to process'
+          description: 'Waiting for processing'
         }
     }
   }
 
-  // Dateityp-Icons
-  const getFileTypeIcon = (type: string, name: string) => {
-    if (type.includes('pdf')) return '📄'
-    if (type.includes('word') || type.includes('docx') || type.includes('document')) return '📝'
-    if (type.includes('text') || name.endsWith('.txt') || name.endsWith('.md')) return '📄'
-    if (type.includes('image')) return '🖼️'
-    return '📄'
-  }
-
-  // Formatiere Dateigröße
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-  }
-
-  // Datei-Upload Handler
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-
-    if (!currentProject) {
-      toast.error('Please select a project first!')
+  // File Upload Handler
+  const handleFileUpload = async (files) => {
+    console.log('handleFileUpload called with:', files)
+    
+    if (!files || files.length === 0) {
+      console.log('No files provided')
       return
     }
+    
+    if (!currentProject) {
+      console.log('No current project selected')
+      toast.error('Please select a project first')
+      return
+    }
+
+    console.log('Current project:', currentProject)
+    console.log('Files to upload:', Array.from(files).map(f => ({ name: f.name, type: f.type, size: f.size })))
 
     setIsUploading(true)
     
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        
-        // Füge Dokument zum Store hinzu
-        addDocument({
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          projectId: currentProject.id
-        })
-      }
+      const result = await DocumentAPI.uploadDocuments(files, currentProject.id)
+      console.log('Upload result:', result)
       
-      toast.success(`${files.length} document(s) uploaded successfully!`)
+      if (result && result.success !== false) {
+        toast.success(`${files.length} document(s) uploaded successfully!`)
+        await loadDocuments() // Reload documents
+      } else {
+        console.error('Upload result indicates failure:', result)
+        toast.error(result?.error || 'Upload failed')
+      }
     } catch (error) {
-      console.error('Upload failed:', error)
-      toast.error('Upload failed. Please try again.')
+      console.error('Upload failed with error:', error)
+      toast.error(`Upload failed: ${error.message}`)
     } finally {
       setIsUploading(false)
     }
   }
 
   // Drag & Drop Handler
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = useCallback((e) => {
     e.preventDefault()
     setIsDragOver(true)
   }, [])
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e) => {
     e.preventDefault()
     setIsDragOver(false)
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback((e) => {
     e.preventDefault()
     setIsDragOver(false)
     const files = e.dataTransfer.files
     handleFileUpload(files)
   }, [currentProject])
 
-  // Dokument löschen
-  const handleDeleteDocument = (documentId: string) => {
-    setDocumentToDelete(documentId)
+  // Delete Document Handler
+  const handleDeleteDocument = (document) => {
+    setDocumentToDelete(document)
     setDeleteDialogOpen(true)
   }
 
@@ -190,8 +362,9 @@ export function DocumentLibrary() {
     if (!documentToDelete) return
 
     try {
-      deleteDocument(documentToDelete)
+      await DocumentAPI.deleteDocument(documentToDelete.id)
       toast.success('Document deleted successfully')
+      await loadDocuments() // Reload documents
     } catch (error) {
       console.error('Delete failed:', error)
       toast.error('Failed to delete document')
@@ -201,437 +374,433 @@ export function DocumentLibrary() {
     }
   }
 
-  // Filter und Such-Logik für Projekt-Dokumente
-  const filteredDocuments = projectDocuments
+  // Filter and sort documents
+  const filteredDocuments = documents
     .filter(doc => {
-      const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus = selectedStatus === 'all' || doc.status === selectedStatus
+      const matchesSearch = doc.filename?.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesStatus = selectedStatus === 'all' || doc.processing_status === selectedStatus
       return matchesSearch && matchesStatus
     })
     .sort((a, b) => {
       switch (sortBy) {
         case 'name':
-          return a.name.localeCompare(b.name)
+          return (a.filename || '').localeCompare(b.filename || '')
         case 'size':
-          return b.size - a.size
+          return (b.file_size || 0) - (a.file_size || 0)
         case 'uploadedAt':
         default:
-          return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+          return new Date(b.uploaded_at || 0).getTime() - new Date(a.uploaded_at || 0).getTime()
       }
     })
 
-  // Statistiken für aktuelles Projekt
+  // Statistics
   const stats = {
-    total: projectDocuments.length,
-    completed: projectDocuments.filter(doc => doc.status === 'completed').length,
-    processing: projectDocuments.filter(doc => doc.status === 'processing').length,
-    failed: projectDocuments.filter(doc => doc.status === 'failed').length,
-    totalSize: projectDocuments.reduce((sum, doc) => sum + doc.size, 0)
+    total: documents.length,
+    completed: documents.filter(doc => doc.processing_status === 'completed').length,
+    processing: documents.filter(doc => doc.processing_status === 'processing').length,
+    failed: documents.filter(doc => doc.processing_status === 'failed').length,
+    totalSize: documents.reduce((sum, doc) => sum + (doc.file_size || 0), 0)
   }
 
-  const documentToDeleteInfo = projectDocuments.find(doc => doc.id === documentToDelete)
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    )
+  }
 
   return (
     <div 
       className={cn(
         "h-full transition-colors duration-300",
         isDragOver 
-          ? "bg-violet-50/50 dark:bg-violet-900/20" 
-          : "bg-slate-50/50 dark:bg-slate-900/30"
+          ? "bg-gradient-to-br from-blue-50 to-violet-50 dark:from-blue-900/20 dark:to-violet-900/20" 
+          : "bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-800"
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="h-full overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-8 py-8">
-          
-          {/* Modern Header */}
-          <div className="mb-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="flex items-center justify-between"
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 p-6">
+        <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-r from-blue-500 to-violet-500 rounded-xl">
+              <FolderIcon className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                Document Library
+              </h1>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {currentProject ? `Project: ${currentProject.name}` : 'No project selected'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading || !currentProject}
+              className="bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 text-white"
             >
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg">
-                  <DocumentTextIcon className="h-6 w-6 text-white" />
-                </div>
+              {isUploading ? (
+                <>
+                  <ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <CloudArrowUpIcon className="h-4 w-4 mr-2" />
+                  Upload Documents
+                </>
+              )}
+            </Button>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".txt,.pdf,.docx,.md"
+              onChange={(e) => handleFileUpload(e.target.files)}
+              className="hidden"
+            />
+          </div>
+        </div>
+
+        {/* Statistics */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
+          <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <DocumentTextIcon className="h-5 w-5 text-slate-500" />
                 <div>
-                  <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-                    {currentProject ? `${currentProject.name} Documents` : 'Document Library'}
-                  </h1>
-                  <p className="text-slate-600 dark:text-slate-400 mt-1">
-                    {currentProject 
-                      ? `Manage documents in ${currentProject.name}`
-                      : 'Please select a project to view documents'
-                    }
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Total</p>
+                  <p className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                    {stats.total}
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Upload Button - nur wenn Projekt ausgewählt */}
-              {currentProject && (
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="bg-gradient-to-r from-violet-500 to-blue-500 hover:from-violet-600 hover:to-blue-600 text-white px-6 py-3 rounded-2xl shadow-lg"
-                  >
-                    {isUploading ? (
-                      <ArrowPathIcon className="h-5 w-5 mr-2 animate-spin" />
-                    ) : (
-                      <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                    )}
-                    {isUploading ? 'Uploading...' : 'Upload Documents'}
-                  </Button>
-                </motion.div>
-              )}
-            </motion.div>
+          <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircleIcon className="h-5 w-5 text-emerald-500" />
+                <div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Completed</p>
+                  <p className="text-xl font-semibold text-emerald-600">
+                    {stats.completed}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Projekt-spezifische Statistiken */}
-            {currentProject && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-                className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-8"
+          <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <ClockIcon className="h-5 w-5 text-blue-500" />
+                <div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Processing</p>
+                  <p className="text-xl font-semibold text-blue-600">
+                    {stats.processing}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <ExclamationTriangleIcon className="h-5 w-5 text-red-500" />
+                <div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Failed</p>
+                  <p className="text-xl font-semibold text-red-600">
+                    {stats.failed}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <ArrowDownTrayIcon className="h-5 w-5 text-slate-500" />
+                <div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Total Size</p>
+                  <p className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                    {formatFileSize(stats.totalSize)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mt-6">
+          <div className="relative flex-1">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search documents..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm"
+            />
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+                <FunnelIcon className="h-4 w-4 mr-2" />
+                Status: {selectedStatus === 'all' ? 'All' : selectedStatus}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
+                All Documents
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedStatus('completed')}>
+                Completed
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedStatus('processing')}>
+                Processing
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedStatus('failed')}>
+                Failed
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+                Sort by: {sortBy === 'uploadedAt' ? 'Upload Date' : sortBy === 'name' ? 'Name' : 'Size'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSortBy('uploadedAt')}>
+                Upload Date
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('name')}>
+                Name
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('size')}>
+                Size
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-6">
+        {isDragOver && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500/20 backdrop-blur-sm"
+          >
+            <div className="text-center">
+              <CloudArrowUpIcon className="h-16 w-16 text-blue-500 mx-auto mb-4" />
+              <h3 className="text-2xl font-bold text-blue-600 mb-2">Drop files here</h3>
+              <p className="text-blue-500">Release to upload to {currentProject?.name}</p>
+            </div>
+          </motion.div>
+        )}
+
+        {!currentProject ? (
+          <div className="text-center py-12">
+            <FolderIcon className="h-16 w-16 text-slate-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+              No Project Selected
+            </h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
+              Please select or create a project to manage documents.
+            </p>
+          </div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="text-center py-12">
+            <DocumentTextIcon className="h-16 w-16 text-slate-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+              {searchTerm ? 'No documents found' : `No documents in ${currentProject.name}`}
+            </h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-lg mx-auto">
+              {searchTerm 
+                ? `No documents match your search "${searchTerm}". Try adjusting your filters.`
+                : `Drag and drop files here or click the upload button to add documents to ${currentProject.name}.`
+              }
+            </p>
+            
+            {!searchTerm && (
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-gradient-to-r from-violet-500 to-blue-500 hover:from-violet-600 hover:to-blue-600 text-white px-8 py-3 rounded-2xl shadow-lg"
               >
-                {[
-                  { 
-                    label: 'Total Documents', 
-                    value: stats.total, 
-                    icon: DocumentTextIcon, 
-                    color: 'from-blue-500 to-cyan-500',
-                    description: `in ${currentProject.name}`
-                  },
-                  { 
-                    label: 'Processed', 
-                    value: stats.completed, 
-                    icon: CheckCircleIcon, 
-                    color: 'from-emerald-500 to-teal-500',
-                    description: 'ready for AI analysis'
-                  },
-                  { 
-                    label: 'Processing', 
-                    value: stats.processing, 
-                    icon: ClockIcon, 
-                    color: 'from-amber-500 to-orange-500',
-                    description: 'being analyzed'
-                  },
-                  { 
-                    label: 'Storage Used', 
-                    value: formatFileSize(stats.totalSize), 
-                    icon: SparklesIcon, 
-                    color: 'from-purple-500 to-pink-500',
-                    description: 'in this project'
-                  }
-                ].map((stat, index) => (
-                  <Card key={stat.label} className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border-slate-200/50 dark:border-slate-700/50 hover:shadow-lg transition-all duration-200">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">{stat.label}</p>
-                          <p className="text-2xl font-bold text-slate-900 dark:text-white">{stat.value}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{stat.description}</p>
+                <PlusIcon className="h-5 w-5 mr-2" />
+                Upload Your First Document
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredDocuments.map((doc, index) => {
+              const statusConfig = getStatusConfig(doc.processing_status || 'uploaded')
+              
+              return (
+                <motion.div
+                  key={doc.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                  whileHover={{ y: -4, scale: 1.02 }}
+                  className="group"
+                >
+                  <Card className="h-full bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border-slate-200/50 dark:border-slate-700/50 hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <CardHeader className="pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={cn("p-2 rounded-lg", statusConfig.bgColor)}>
+                            <statusConfig.icon className={cn("h-5 w-5", statusConfig.color)} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                              {doc.filename || 'Untitled Document'}
+                            </h3>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                              {formatFileSize(doc.file_size || 0)}
+                            </p>
+                          </div>
                         </div>
-                        <div className={`w-12 h-12 bg-gradient-to-br ${stat.color} rounded-2xl flex items-center justify-center shadow-lg`}>
-                          <stat.icon className="h-6 w-6 text-white" />
+                        
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                              </svg>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem>
+                              <EyeIcon className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+                              Download
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteDocument(doc)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <TrashIcon className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="pt-0">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge 
+                            variant="secondary" 
+                            className={cn("text-xs", statusConfig.bgColor, statusConfig.color)}
+                          >
+                            {statusConfig.label}
+                          </Badge>
+                          <span className="text-xs text-slate-500">
+                            {doc.file_type || 'Unknown type'}
+                          </span>
                         </div>
+                        
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          {statusConfig.description}
+                        </p>
+                        
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <CalendarIcon className="h-3 w-3" />
+                          <span>
+                            {doc.uploaded_at ? formatDate(doc.uploaded_at) : 'Unknown date'}
+                          </span>
+                        </div>
+                        
+                        {doc.processing_error && (
+                          <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                            <p className="text-xs text-red-600 dark:text-red-400">
+                              {doc.processing_error}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
-                ))}
-              </motion.div>
-            )}
+                </motion.div>
+              )
+            })}
           </div>
-
-          {/* Kein Projekt ausgewählt */}
-          {!currentProject && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="flex flex-col items-center justify-center min-h-[500px] text-center"
-            >
-              <div className="w-20 h-20 bg-gradient-to-br from-slate-400 to-slate-600 rounded-3xl flex items-center justify-center mb-6 mx-auto shadow-2xl">
-                <FolderIcon className="h-10 w-10 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
-                No Project Selected
-              </h3>
-              <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-lg mx-auto">
-                Please select a project from the sidebar to view and manage documents.
-              </p>
-            </motion.div>
-          )}
-
-          {/* Projekt ausgewählt - zeige Dokumente */}
-          {currentProject && (
-            <>
-              {/* Search and Filters */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="mb-8"
-              >
-                <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border-slate-200/50 dark:border-slate-700/50">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row gap-4 items-center">
-                      {/* Search */}
-                      <div className="relative flex-1">
-                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-                        <Input
-                          placeholder="Search documents in this project..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl"
-                        />
-                      </div>
-
-                      {/* Filters */}
-                      <div className="flex gap-3">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="rounded-xl border-slate-200 dark:border-slate-700">
-                              <FunnelIcon className="h-4 w-4 mr-2" />
-                              Status: {selectedStatus === 'all' ? 'All' : selectedStatus}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
-                              All Documents
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setSelectedStatus('completed')}>
-                              Completed
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setSelectedStatus('processing')}>
-                              Processing
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setSelectedStatus('failed')}>
-                              Failed
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="rounded-xl border-slate-200 dark:border-slate-700">
-                              Sort: {sortBy === 'uploadedAt' ? 'Date' : sortBy === 'name' ? 'Name' : 'Size'}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => setSortBy('uploadedAt')}>
-                              Upload Date
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setSortBy('name')}>
-                              Name
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setSortBy('size')}>
-                              File Size
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              {/* Document Grid/List */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-              >
-                {filteredDocuments.length === 0 ? (
-                  // Empty State
-                  <div className={cn(
-                    "border-2 border-dashed rounded-3xl p-16 text-center bg-white/50 dark:bg-slate-800/50 backdrop-blur-xl transition-all duration-300",
-                    isDragOver 
-                      ? "border-violet-400 bg-violet-50/50 dark:bg-violet-900/20" 
-                      : "border-slate-300 dark:border-slate-600"
-                  )}>
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 300, delay: 0.5 }}
-                      className="mb-6"
-                    >
-                      <div className="w-20 h-20 bg-gradient-to-br from-violet-500 to-blue-500 rounded-3xl flex items-center justify-center mx-auto shadow-2xl">
-                        <CloudArrowUpIcon className="h-10 w-10 text-white" />
-                      </div>
-                    </motion.div>
-                    
-                    <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
-                      {searchTerm ? 'No documents found' : `No documents in ${currentProject.name}`}
-                    </h3>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-lg mx-auto">
-                      {searchTerm 
-                        ? `No documents match your search "${searchTerm}". Try adjusting your filters.`
-                        : `Drag and drop files here or click the upload button to add documents to ${currentProject.name}.`
-                      }
-                    </p>
-                    
-                    {!searchTerm && (
-                      <Button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="bg-gradient-to-r from-violet-500 to-blue-500 hover:from-violet-600 hover:to-blue-600 text-white px-8 py-3 rounded-2xl shadow-lg"
-                      >
-                        <PlusIcon className="h-5 w-5 mr-2" />
-                        Upload Your First Document
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  // Document Grid
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredDocuments.map((doc, index) => {
-                      const statusConfig = getStatusConfig(doc.status || 'uploaded')
-                      
-                      return (
-                        <motion.div
-                          key={doc.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: index * 0.1 }}
-                          whileHover={{ y: -4, scale: 1.02 }}
-                          className="group"
-                        >
-                          <Card className="h-full bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl border-slate-200/50 dark:border-slate-700/50 hover:shadow-xl transition-all duration-300 overflow-hidden">
-                            <CardHeader className="pb-4">
-                              <div className="flex items-start justify-between">
-                                {/* File Icon & Status */}
-                                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                                  <div className="text-3xl flex-shrink-0">{getFileTypeIcon(doc.type, doc.name)}</div>
-                                  <div className="flex-1 min-w-0">
-                                    <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white truncate">
-                                      {doc.name}
-                                    </CardTitle>
-                                    <div className="flex items-center space-x-2 mt-1">
-                                      <statusConfig.icon className={`h-4 w-4 ${statusConfig.color}`} />
-                                      <span className={`text-sm font-medium ${statusConfig.color}`}>
-                                        {statusConfig.label}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Action Menu */}
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-2 flex-shrink-0"
-                                    >
-                                      <span className="sr-only">Actions</span>
-                                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                                      </svg>
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent>
-                                    <DropdownMenuItem>
-                                      <EyeIcon className="h-4 w-4 mr-2" />
-                                      View
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                      <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
-                                      Download
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem 
-                                      className="text-red-600"
-                                      onClick={() => handleDeleteDocument(doc.id)}
-                                    >
-                                      <TrashIcon className="h-4 w-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </CardHeader>
-
-                            <CardContent className="pt-0">
-                              {/* Document Stats */}
-                              <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
-                                  <div className="text-lg font-semibold text-slate-900 dark:text-white">
-                                    {formatFileSize(doc.size)}
-                                  </div>
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">Size</div>
-                                </div>
-                                <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
-                                  <div className="text-lg font-semibold text-slate-900 dark:text-white">
-                                    {doc.type.split('/')[1]?.toUpperCase() || 'DOC'}
-                                  </div>
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">Type</div>
-                                </div>
-                              </div>
-
-                              {/* Upload Date */}
-                              <div className="flex items-center text-xs text-slate-500 dark:text-slate-400">
-                                <CalendarIcon className="h-3 w-3 mr-1" />
-                                {new Date(doc.uploadedAt).toLocaleDateString()}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
-                      )
-                    })}
-                  </div>
-                )}
-              </motion.div>
-            </>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <TrashIcon className="h-5 w-5" />
-              Delete Document
-            </DialogTitle>
+            <DialogTitle>Delete Document</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{documentToDeleteInfo?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{documentToDelete?.filename}"? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button 
               variant="outline" 
               onClick={() => setDeleteDialogOpen(false)}
-              className="rounded-xl"
             >
               Cancel
             </Button>
             <Button 
               variant="destructive" 
               onClick={confirmDelete}
-              className="rounded-xl"
             >
-              <TrashIcon className="h-4 w-4 mr-2" />
               Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept=".pdf,.doc,.docx,.txt,.md"
-        onChange={(e) => handleFileUpload(e.target.files)}
-        className="hidden"
-      />
     </div>
   )
 }

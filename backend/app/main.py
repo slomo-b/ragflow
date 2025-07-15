@@ -1,6 +1,8 @@
+#!/usr/bin/env python3
 """
-RagFlow Backend - Main FastAPI Application
-Enhanced document processing with AI-powered features
+RagFlow Backend - Complete Implementation
+AI-powered document analysis with stable RAG integration
+Compatible with Frontend API requirements
 """
 
 import asyncio
@@ -9,199 +11,341 @@ import json
 import traceback
 import os
 import sys
+import uuid
+import hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
 from contextlib import asynccontextmanager
 
+# FastAPI imports
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+# Google AI imports
+try:
+    import google.generativeai as genai
+    GOOGLE_AI_AVAILABLE = True
+except ImportError:
+    GOOGLE_AI_AVAILABLE = False
+
+# Document processing imports
+try:
+    import PyPDF2
+    import pdfplumber
+    from docx import Document as DocxDocument
+    DOCUMENT_PROCESSING_AVAILABLE = True
+except ImportError:
+    DOCUMENT_PROCESSING_AVAILABLE = False
+
 from .config import settings
 
-# === Windows-Compatible Logger Class ===
-class WindowsCompatibleLogger:
-    """Windows-compatible logger without emoji characters"""
+# === Enhanced Logger ===
+class RagFlowLogger:
+    """Enhanced logger for RagFlow with structured output"""
     
-    def __init__(self, log_file: str = "backend_debug.log"):
+    def __init__(self, log_file: str = "ragflow_backend.log"):
         self.log_file = Path(log_file)
         self.setup_logging()
     
     def setup_logging(self):
-        """Setup logging with Windows-compatible encoding"""
-        # Ensure UTF-8 encoding for Python output
-        if sys.platform == "win32":
-            # Force UTF-8 for Windows console
-            try:
-                os.system('chcp 65001 >nul 2>&1')  # Set console to UTF-8
-            except:
-                pass
-        
+        """Setup structured logging"""
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
+            format='%(asctime)s - %(levelname)s - [%(name)s] %(message)s',
             handlers=[
                 logging.FileHandler(self.log_file, encoding='utf-8'),
                 logging.StreamHandler(sys.stdout)
             ]
         )
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("RagFlow")
     
-    def log(self, message: str, level: str = "info"):
-        """Log a message without emojis for Windows compatibility"""
-        # Remove emojis and replace with text equivalents
-        clean_message = self._clean_message(message)
-        getattr(self.logger, level.lower())(clean_message)
+    def info(self, message: str, component: str = "SYSTEM"):
+        self.logger.info(f"[{component}] {message}")
     
-    def _clean_message(self, message: str) -> str:
-        """Clean message from emojis for Windows compatibility"""
-        emoji_replacements = {
-            '🚀': '[ROCKET]',
-            '✅': '[OK]',
-            '⚠️': '[WARNING]',
-            '❌': '[ERROR]',
-            '📁': '[FOLDER]',
-            '🔧': '[CONFIG]',
-            '🤖': '[ROBOT]',
-            '💾': '[SAVE]',
-            '👋': '[WAVE]',
-            '📄': '[DOC]',
-            '🗑️': '[DELETE]',
-            '💬': '[CHAT]',
-            '📋': '[CLIPBOARD]'
-        }
-        
-        for emoji, replacement in emoji_replacements.items():
-            message = message.replace(emoji, replacement)
-        
-        return message
+    def error(self, message: str, component: str = "ERROR"):
+        self.logger.error(f"[{component}] {message}")
+    
+    def warning(self, message: str, component: str = "WARNING"):
+        self.logger.warning(f"[{component}] {message}")
 
-# === Initialize Logger ===
-debug_logger = WindowsCompatibleLogger("backend_debug.log")
+# Initialize logger
+logger = RagFlowLogger()
 
-# === Initialize Data Storage ===
-projects_db: Dict[str, Dict[str, Any]] = {}
-documents_db: Dict[str, Dict[str, Any]] = {}
-chats_db: Dict[str, Dict[str, Any]] = {}
-
-# === Data File Paths ===
+# === Data Storage ===
 DATA_DIR = Path("./data")
-PROJECTS_FILE = DATA_DIR / "projects.json"
-DOCUMENTS_FILE = DATA_DIR / "documents.json"
-CHATS_FILE = DATA_DIR / "chats.json"
+DATA_DIR.mkdir(exist_ok=True)
+
+# In-memory databases
+projects_db: Dict[str, Dict] = {}
+documents_db: Dict[str, Dict] = {}
+chats_db: Dict[str, Dict] = {}
+vector_db: Dict[str, Dict] = {}  # Simple vector storage
+
+# === RAG Components ===
+class SimpleRAG:
+    """Simple but stable RAG implementation"""
+    
+    def __init__(self):
+        self.documents = {}
+        self.chunks = {}
+        self.embeddings = {}
+        
+    def add_document(self, doc_id: str, content: str, metadata: Dict = None):
+        """Add document to RAG system"""
+        try:
+            # Store document
+            self.documents[doc_id] = {
+                "content": content,
+                "metadata": metadata or {},
+                "chunks": []
+            }
+            
+            # Create chunks
+            chunks = self._create_chunks(content)
+            for i, chunk in enumerate(chunks):
+                chunk_id = f"{doc_id}_chunk_{i}"
+                self.chunks[chunk_id] = {
+                    "content": chunk,
+                    "document_id": doc_id,
+                    "chunk_index": i,
+                    "metadata": metadata or {}
+                }
+                self.documents[doc_id]["chunks"].append(chunk_id)
+            
+            logger.info(f"Added document {doc_id} with {len(chunks)} chunks", "RAG")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to add document {doc_id}: {e}", "RAG")
+            return False
+    
+    def _create_chunks(self, content: str, chunk_size: int = 1000, overlap: int = 100):
+        """Create text chunks with overlap"""
+        chunks = []
+        words = content.split()
+        
+        for i in range(0, len(words), chunk_size - overlap):
+            chunk_words = words[i:i + chunk_size]
+            chunk = " ".join(chunk_words)
+            if chunk.strip():
+                chunks.append(chunk)
+        
+        return chunks
+    
+    def search(self, query: str, top_k: int = 5) -> List[Dict]:
+        """Simple keyword-based search (can be enhanced with embeddings)"""
+        query_words = set(query.lower().split())
+        results = []
+        
+        for chunk_id, chunk_data in self.chunks.items():
+            chunk_words = set(chunk_data["content"].lower().split())
+            
+            # Simple relevance scoring based on word overlap
+            overlap = len(query_words.intersection(chunk_words))
+            if overlap > 0:
+                score = overlap / len(query_words.union(chunk_words))
+                results.append({
+                    "chunk_id": chunk_id,
+                    "content": chunk_data["content"],
+                    "score": score,
+                    "document_id": chunk_data["document_id"],
+                    "metadata": chunk_data["metadata"]
+                })
+        
+        # Sort by relevance and return top_k
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:top_k]
+
+# Initialize RAG system
+rag_system = SimpleRAG()
+
+# === Google AI Integration ===
+class GoogleAIChat:
+    """Google AI chat integration"""
+    
+    def __init__(self):
+        self.model = None
+        self.initialize()
+    
+    def initialize(self):
+        """Initialize Google AI"""
+        if not GOOGLE_AI_AVAILABLE:
+            logger.warning("Google AI not available", "AI")
+            return False
+        
+        api_key = settings.GOOGLE_API_KEY
+        if not api_key:
+            logger.warning("Google AI API key not configured", "AI")
+            return False
+        
+        try:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
+            logger.info("Google AI initialized successfully", "AI")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize Google AI: {e}", "AI")
+            return False
+    
+    def generate_response(self, message: str, context: str = "") -> str:
+        """Generate AI response with context"""
+        if not self.model:
+            return f"Simple response: {message} (AI not available)"
+        
+        try:
+            prompt = f"""You are a helpful AI assistant analyzing documents.
+
+Context from documents:
+{context}
+
+User question: {message}
+
+Please provide a helpful response based on the context and your knowledge."""
+
+            response = self.model.generate_content(prompt)
+            return response.text
+            
+        except Exception as e:
+            logger.error(f"AI generation failed: {e}", "AI")
+            return f"I understand your question: '{message}'. However, I encountered an issue generating a detailed response."
+
+# Initialize AI chat
+ai_chat = GoogleAIChat()
+
+# === Document Processing ===
+class DocumentProcessor:
+    """Document processing utilities"""
+    
+    @staticmethod
+    def extract_text_from_pdf(file_path: Path) -> str:
+        """Extract text from PDF"""
+        try:
+            if DOCUMENT_PROCESSING_AVAILABLE:
+                # Try pdfplumber first
+                try:
+                    import pdfplumber
+                    with pdfplumber.open(file_path) as pdf:
+                        text = ""
+                        for page in pdf.pages:
+                            page_text = page.extract_text()
+                            if page_text:
+                                text += page_text + "\n"
+                        return text
+                except:
+                    pass
+                
+                # Fallback to PyPDF2
+                try:
+                    with open(file_path, 'rb') as file:
+                        reader = PyPDF2.PdfReader(file)
+                        text = ""
+                        for page in reader.pages:
+                            text += page.extract_text() + "\n"
+                        return text
+                except:
+                    pass
+            
+            return f"[PDF content - {file_path.name}]"
+            
+        except Exception as e:
+            logger.error(f"Failed to extract PDF text: {e}", "DOC")
+            return f"[PDF extraction failed - {file_path.name}]"
+    
+    @staticmethod
+    def extract_text_from_docx(file_path: Path) -> str:
+        """Extract text from DOCX"""
+        try:
+            if DOCUMENT_PROCESSING_AVAILABLE:
+                doc = DocxDocument(file_path)
+                text = ""
+                for paragraph in doc.paragraphs:
+                    text += paragraph.text + "\n"
+                return text
+            else:
+                return f"[DOCX content - {file_path.name}]"
+                
+        except Exception as e:
+            logger.error(f"Failed to extract DOCX text: {e}", "DOC")
+            return f"[DOCX extraction failed - {file_path.name}]"
+    
+    @staticmethod
+    def extract_text_from_txt(file_path: Path) -> str:
+        """Extract text from TXT"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                return file.read()
+        except Exception as e:
+            logger.error(f"Failed to extract TXT text: {e}", "DOC")
+            return f"[TXT extraction failed - {file_path.name}]"
+
+# === Data Persistence ===
+def save_data():
+    """Save all data to files"""
+    try:
+        # Save projects
+        with open(DATA_DIR / "projects.json", "w", encoding="utf-8") as f:
+            json.dump(projects_db, f, indent=2, ensure_ascii=False)
+        
+        # Save documents
+        with open(DATA_DIR / "documents.json", "w", encoding="utf-8") as f:
+            json.dump(documents_db, f, indent=2, ensure_ascii=False)
+        
+        # Save chats
+        with open(DATA_DIR / "chats.json", "w", encoding="utf-8") as f:
+            json.dump(chats_db, f, indent=2, ensure_ascii=False)
+        
+        logger.info("Data saved successfully", "DATA")
+    except Exception as e:
+        logger.error(f"Failed to save data: {e}", "DATA")
 
 def load_data():
-    """Load data from JSON files"""
+    """Load all data from files"""
     global projects_db, documents_db, chats_db
     
     try:
-        if PROJECTS_FILE.exists():
-            with open(PROJECTS_FILE, 'r', encoding='utf-8') as f:
+        # Load projects
+        projects_file = DATA_DIR / "projects.json"
+        if projects_file.exists():
+            with open(projects_file, "r", encoding="utf-8") as f:
                 projects_db = json.load(f)
-                debug_logger.log(f"[OK] Loaded {len(projects_db)} projects")
         
-        if DOCUMENTS_FILE.exists():
-            with open(DOCUMENTS_FILE, 'r', encoding='utf-8') as f:
+        # Load documents
+        documents_file = DATA_DIR / "documents.json"
+        if documents_file.exists():
+            with open(documents_file, "r", encoding="utf-8") as f:
                 documents_db = json.load(f)
-                debug_logger.log(f"[OK] Loaded {len(documents_db)} documents")
         
-        if CHATS_FILE.exists():
-            with open(CHATS_FILE, 'r', encoding='utf-8') as f:
+        # Load chats
+        chats_file = DATA_DIR / "chats.json"
+        if chats_file.exists():
+            with open(chats_file, "r", encoding="utf-8") as f:
                 chats_db = json.load(f)
-                debug_logger.log(f"[OK] Loaded {len(chats_db)} chats")
-                
-    except Exception as e:
-        debug_logger.log(f"[WARNING] Error loading data: {e}", "warning")
-
-def save_data():
-    """Save data to JSON files"""
-    try:
-        DATA_DIR.mkdir(exist_ok=True)
         
-        with open(PROJECTS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(projects_db, f, indent=2, ensure_ascii=False)
+        logger.info(f"Loaded {len(projects_db)} projects, {len(documents_db)} documents, {len(chats_db)} chats", "DATA")
         
-        with open(DOCUMENTS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(documents_db, f, indent=2, ensure_ascii=False)
-        
-        with open(CHATS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(chats_db, f, indent=2, ensure_ascii=False)
-            
-        debug_logger.log("[SAVE] Data saved successfully")
+        # Rebuild RAG system
+        for doc_id, doc_data in documents_db.items():
+            if doc_data.get("processing_status") == "completed" and "extracted_text" in doc_data:
+                rag_system.add_document(doc_id, doc_data["extracted_text"], doc_data.get("metadata", {}))
         
     except Exception as e:
-        debug_logger.log(f"[ERROR] Error saving data: {e}", "error")
+        logger.error(f"Failed to load data: {e}", "DATA")
 
-# === Document Processor Import with Absolute Import ===
-try:
-    # Try absolute import first
-    try:
-        from document_processor import process_uploaded_document, DocumentProcessor
-        debug_logger.log("[OK] Document Processor loaded (absolute import)")
-        PROCESSOR_AVAILABLE = True
-    except ImportError:
-        # Try relative import as fallback
-        from .document_processor import process_uploaded_document, DocumentProcessor
-        debug_logger.log("[OK] Document Processor loaded (relative import)")
-        PROCESSOR_AVAILABLE = True
-except ImportError as e:
-    debug_logger.log(f"[WARNING] Document Processor not available - using fallback: {e}", "warning")
-    PROCESSOR_AVAILABLE = False
-    
-    # Fallback Document Processor
-    class FallbackDocumentProcessor:
-        def __init__(self):
-            self.supported_types = {'.txt': 'text', '.md': 'markdown'}
-        
-        async def process_document(self, file_path: str, file_type: str):
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    text = f.read()
-                
-                return {
-                    "success": True,
-                    "text": text,
-                    "chunks": [{"id": "1", "text": text, "start_pos": 0, "end_pos": len(text)}],
-                    "metadata": {"word_count": len(text.split()), "char_count": len(text)}
-                }
-            except Exception as e:
-                return {"success": False, "error": str(e)}
-    
-    DocumentProcessor = FallbackDocumentProcessor
-    
-    async def process_uploaded_document(file_path: str, file_type: str, document_id: str, documents_db: dict):
-        processor = DocumentProcessor()
-        result = await processor.process_document(file_path, file_type)
-        
-        if document_id in documents_db:
-            doc = documents_db[document_id]
-            if result["success"]:
-                doc["processing_status"] = "completed"
-                doc["extracted_text"] = result["text"]
-                doc["text_chunks"] = result["chunks"]
-                doc["text_metadata"] = result["metadata"]
-                doc["processing_error"] = None
-                debug_logger.log(f"[OK] Document processed: {doc.get('filename', 'unknown')}")
-            else:
-                doc["processing_status"] = "failed"
-                doc["processing_error"] = result["error"]
-                debug_logger.log(f"[ERROR] Document processing failed: {result['error']}")
-            
-            doc["processed_at"] = datetime.utcnow().isoformat()
-
-# === Lifespan Event Handler ===
+# === Lifespan Management ===
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    debug_logger.log("[ROCKET] Starting RagFlow Backend...")
+    logger.info("Starting RagFlow Backend...", "STARTUP")
     load_data()
+    logger.info("RagFlow Backend ready!", "STARTUP")
     yield
     # Shutdown
-    debug_logger.log("[SAVE] Saving data before shutdown...")
+    logger.info("Shutting down RagFlow Backend...", "SHUTDOWN")
     save_data()
-    debug_logger.log("[WAVE] RagFlow Backend stopped")
+    logger.info("RagFlow Backend stopped", "SHUTDOWN")
 
 # === FastAPI App ===
 app = FastAPI(
@@ -244,7 +388,8 @@ async def health_check():
         "version": settings.VERSION,
         "timestamp": datetime.utcnow().isoformat(),
         "features": {
-            "document_processor": PROCESSOR_AVAILABLE,
+            "google_ai": GOOGLE_AI_AVAILABLE and bool(settings.GOOGLE_API_KEY),
+            "document_processing": DOCUMENT_PROCESSING_AVAILABLE,
             "projects": len(projects_db),
             "documents": len(documents_db),
             "chats": len(chats_db)
@@ -261,10 +406,9 @@ async def get_projects():
 @app.post("/api/v1/projects/")
 async def create_project(project: ProjectCreate):
     """Create a new project"""
-    import uuid
-    
     project_id = str(uuid.uuid4())
-    new_project = {
+    
+    project_data = {
         "id": project_id,
         "name": project.name,
         "description": project.description,
@@ -272,14 +416,16 @@ async def create_project(project: ProjectCreate):
         "updated_at": datetime.utcnow().isoformat(),
         "document_ids": [],
         "document_count": 0,
-        "last_activity": datetime.utcnow().isoformat()
+        "chat_count": 0,
+        "status": "active",
+        "settings": {}
     }
     
-    projects_db[project_id] = new_project
+    projects_db[project_id] = project_data
     save_data()
     
-    debug_logger.log(f"[OK] Project created: {project.name} (ID: {project_id})")
-    return {"message": "Project created", "project": new_project}
+    logger.info(f"Created project: {project.name}", "PROJECT")
+    return project_data
 
 @app.delete("/api/v1/projects/{project_id}")
 async def delete_project(project_id: str):
@@ -287,18 +433,23 @@ async def delete_project(project_id: str):
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    deleted_project = projects_db.pop(project_id)
+    project = projects_db[project_id]
     
-    # Remove project association from documents
-    for doc in documents_db.values():
-        if project_id in doc.get("project_ids", []):
-            doc["project_ids"].remove(project_id)
+    # Remove associated documents
+    for doc_id in project.get("document_ids", []):
+        if doc_id in documents_db:
+            documents_db[doc_id]["project_ids"].remove(project_id)
+            if not documents_db[doc_id]["project_ids"]:
+                del documents_db[doc_id]
     
+    # Remove project
+    del projects_db[project_id]
     save_data()
-    debug_logger.log(f"[DELETE] Project deleted: {deleted_project['name']}")
-    return {"message": f"Project '{deleted_project['name']}' deleted", "project": deleted_project}
+    
+    logger.info(f"Deleted project: {project['name']}", "PROJECT")
+    return {"message": f"Project '{project['name']}' deleted"}
 
-# === Document Upload Endpoint ===
+# === Document Endpoints ===
 @app.post("/api/v1/upload/documents")
 async def upload_documents(
     background_tasks: BackgroundTasks,
@@ -307,104 +458,118 @@ async def upload_documents(
     tags: Optional[str] = Form(None)
 ):
     """Upload documents with background processing"""
-    if not files:
-        raise HTTPException(status_code=400, detail="No files provided")
     
-    if project_id and project_id not in projects_db:
-        raise HTTPException(status_code=404, detail="Project not found")
+    # Create upload directory
+    upload_dir = Path(settings.UPLOAD_DIRECTORY)
+    upload_dir.mkdir(exist_ok=True)
     
-    uploaded_documents = []
+    uploaded_docs = []
     
     for file in files:
-        if not file.filename:
-            continue
-            
-        # Validate file type
-        file_extension = Path(file.filename).suffix.lower()
-        if file_extension not in settings.ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"File type {file_extension} not supported. Allowed: {', '.join(settings.ALLOWED_EXTENSIONS)}"
-            )
-        
-        # Create document ID
-        import uuid
-        document_id = str(uuid.uuid4())
-        
-        # Save file
-        upload_dir = Path(settings.UPLOAD_DIRECTORY)
-        upload_dir.mkdir(exist_ok=True)
-        
-        file_path = upload_dir / f"{document_id}_{file.filename}"
-        
         try:
+            # Generate unique filename
+            file_id = str(uuid.uuid4())
+            file_extension = Path(file.filename).suffix.lower()
+            safe_filename = f"{file_id}{file_extension}"
+            file_path = upload_dir / safe_filename
+            
+            # Save file
             with open(file_path, "wb") as buffer:
                 content = await file.read()
                 buffer.write(content)
+            
+            # Create document record
+            document_data = {
+                "id": file_id,
+                "filename": file.filename,
+                "safe_filename": safe_filename,
+                "file_type": file_extension,
+                "file_size": len(content),
+                "file_path": str(file_path),
+                "uploaded_at": datetime.utcnow().isoformat(),
+                "processing_status": "pending",
+                "project_ids": [project_id] if project_id else [],
+                "tags": tags.split(",") if tags else [],
+                "metadata": {}
+            }
+            
+            documents_db[file_id] = document_data
+            
+            # Add to project
+            if project_id and project_id in projects_db:
+                projects_db[project_id]["document_ids"].append(file_id)
+                projects_db[project_id]["document_count"] = len(projects_db[project_id]["document_ids"])
+                projects_db[project_id]["updated_at"] = datetime.utcnow().isoformat()
+            
+            uploaded_docs.append(document_data)
+            
+            # Schedule background processing
+            background_tasks.add_task(process_document, file_id)
+            
+            logger.info(f"Uploaded document: {file.filename}", "UPLOAD")
+            
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
-        
-        # Create document entry
-        document_entry = {
-            "id": document_id,
-            "filename": file.filename,
-            "file_type": file_extension[1:],  # Remove the dot
-            "file_size": len(content),
-            "file_path": str(file_path),
-            "project_ids": [project_id] if project_id else [],
-            "tags": tags.split(",") if tags else [],
-            "uploaded_at": datetime.utcnow().isoformat(),
-            "processing_status": "pending",
-            "chunk_count": 0,
-            "total_tokens": None,
-            "summary": None,
-            "extracted_text": None,
-            "text_chunks": []
-        }
-        
-        documents_db[document_id] = document_entry
-        
-        # Update project
-        if project_id:
-            projects_db[project_id]["document_ids"].append(document_id)
-            projects_db[project_id]["document_count"] = len(projects_db[project_id]["document_ids"])
-            projects_db[project_id]["updated_at"] = datetime.utcnow().isoformat()
-        
-        uploaded_documents.append(document_entry)
-        
-        # Schedule background processing
-        background_tasks.add_task(
-            process_uploaded_document,
-            str(file_path),
-            file_extension[1:],
-            document_id,
-            documents_db
-        )
-        
-        debug_logger.log(f"[DOC] Document uploaded: {file.filename} (ID: {document_id})")
+            logger.error(f"Failed to upload {file.filename}: {e}", "UPLOAD")
+            continue
     
     save_data()
-    
-    return {
-        "message": f"Successfully uploaded {len(uploaded_documents)} document(s)",
-        "documents": uploaded_documents,
-        "processing_started": True
-    }
+    return {"uploaded": len(uploaded_docs), "documents": uploaded_docs}
 
-# === Document Endpoints ===
+async def process_document(document_id: str):
+    """Process document in background"""
+    try:
+        doc = documents_db.get(document_id)
+        if not doc:
+            return
+        
+        doc["processing_status"] = "processing"
+        doc["processing_started_at"] = datetime.utcnow().isoformat()
+        
+        file_path = Path(doc["file_path"])
+        file_type = doc["file_type"].lower()
+        
+        # Extract text based on file type
+        if file_type == ".pdf":
+            extracted_text = DocumentProcessor.extract_text_from_pdf(file_path)
+        elif file_type in [".docx", ".doc"]:
+            extracted_text = DocumentProcessor.extract_text_from_docx(file_path)
+        elif file_type == ".txt":
+            extracted_text = DocumentProcessor.extract_text_from_txt(file_path)
+        else:
+            extracted_text = f"[Unsupported file type: {file_type}]"
+        
+        # Store extracted text
+        doc["extracted_text"] = extracted_text
+        doc["text_length"] = len(extracted_text)
+        doc["processing_status"] = "completed"
+        doc["processed_at"] = datetime.utcnow().isoformat()
+        
+        # Add to RAG system
+        rag_system.add_document(document_id, extracted_text, doc.get("metadata", {}))
+        
+        save_data()
+        logger.info(f"Processed document: {doc['filename']}", "PROCESSING")
+        
+    except Exception as e:
+        doc["processing_status"] = "failed"
+        doc["processing_error"] = str(e)
+        save_data()
+        logger.error(f"Failed to process document {document_id}: {e}", "PROCESSING")
+
 @app.get("/api/v1/documents/")
 async def get_documents(skip: int = 0, limit: int = 10, project_id: Optional[str] = None):
     """Get documents"""
     documents = list(documents_db.values())
     
     if project_id:
-        documents = [
-            doc for doc in documents 
-            if project_id in doc.get("project_ids", [])
-        ]
+        documents = [doc for doc in documents if project_id in doc.get("project_ids", [])]
     
+    # Sort by upload date (newest first)
+    documents.sort(key=lambda x: x.get("uploaded_at", ""), reverse=True)
+    
+    # Pagination
     total = len(documents)
-    documents = documents[skip:skip+limit]
+    documents = documents[skip:skip + limit]
     
     return {
         "documents": documents,
@@ -419,15 +584,15 @@ async def delete_document(document_id: str):
     if document_id not in documents_db:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    document = documents_db.pop(document_id)
+    document = documents_db[document_id]
     
-    # Delete physical file
+    # Delete file
     try:
         file_path = Path(document["file_path"])
         if file_path.exists():
             file_path.unlink()
     except Exception as e:
-        debug_logger.log(f"[WARNING] Failed to delete file {document['file_path']}: {e}", "warning")
+        logger.warning(f"Failed to delete file {document['file_path']}: {e}", "DELETE")
     
     # Remove from projects
     for project in projects_db.values():
@@ -436,72 +601,136 @@ async def delete_document(document_id: str):
             project["document_count"] = len(project["document_ids"])
             project["updated_at"] = datetime.utcnow().isoformat()
     
+    # Remove from RAG system
+    if document_id in rag_system.documents:
+        del rag_system.documents[document_id]
+    
+    # Remove document
+    del documents_db[document_id]
     save_data()
-    debug_logger.log(f"[DELETE] Document deleted: {document['filename']}")
-    return {"message": f"Document '{document['filename']}' deleted", "document": document}
+    
+    logger.info(f"Deleted document: {document['filename']}", "DELETE")
+    return {"message": f"Document '{document['filename']}' deleted"}
 
-# === Chat Endpoints (Multiple versions for compatibility) ===
+# === Chat Endpoints ===
 @app.post("/api/v1/chat")
-async def chat_with_documents(request: Union[ChatMessage, dict, FlexibleChatMessage]):
-    """Enhanced chat endpoint with flexible input handling"""
+async def chat_with_documents(request: Request):
+    """Enhanced chat endpoint with RAG integration"""
     try:
-        # Handle different input types
-        if isinstance(request, dict):
-            message = request.get("message", "")
-            project_id = request.get("project_id")
-            use_documents = request.get("use_documents", True)
+        body = await request.json()
+        logger.info(f"Chat request received: {json.dumps(body, indent=2)}", "CHAT")
+        
+        # Parse different request formats
+        if "messages" in body:
+            # Frontend format with messages array
+            messages = body.get("messages", [])
+            user_messages = [msg for msg in messages if msg.get("role") == "user"]
+            message = user_messages[-1].get("content", "") if user_messages else ""
         else:
-            message = request.message
-            project_id = getattr(request, 'project_id', None)
-            use_documents = getattr(request, 'use_documents', True)
+            # Direct message format
+            message = body.get("message", "")
+        
+        project_id = body.get("project_id")
+        use_documents = body.get("use_documents", True)
         
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
         
-        # Simple response for now
-        response_text = f"I received your message: '{message}'. Backend is working perfectly! 🚀"
+        logger.info(f"Processing chat: '{message[:50]}...'", "CHAT")
         
-        # Create chat entry
-        import uuid
+        # RAG Search
+        context = ""
+        sources = []
+        
+        if use_documents and rag_system.documents:
+            search_results = rag_system.search(message, top_k=3)
+            
+            if search_results:
+                context_parts = []
+                for result in search_results:
+                    context_parts.append(f"Document: {result['document_id']}\nContent: {result['content'][:500]}...")
+                    
+                    # Add source info
+                    doc_data = documents_db.get(result['document_id'])
+                    if doc_data:
+                        sources.append({
+                            "id": result['document_id'],
+                            "filename": doc_data.get('filename', 'Unknown'),
+                            "excerpt": result['content'][:200] + "...",
+                            "relevance_score": result['score']
+                        })
+                
+                context = "\n\n".join(context_parts)
+                logger.info(f"Found {len(search_results)} relevant documents", "RAG")
+        
+        # Generate AI response
+        if context:
+            response_text = ai_chat.generate_response(message, context)
+        else:
+            response_text = ai_chat.generate_response(message)
+        
+        # Create chat record
         chat_id = str(uuid.uuid4())
-        
         chat_entry = {
             "id": chat_id,
             "project_id": project_id,
             "user_message": message,
             "ai_response": response_text,
             "timestamp": datetime.utcnow().isoformat(),
+            "sources": sources,
+            "context_used": bool(context),
             "documents_used": use_documents,
             "metadata": {
-                "model": "simple-response",
-                "processing_time": 0.1,
-                "status": "success"
+                "model": settings.GEMINI_MODEL,
+                "context_length": len(context),
+                "sources_count": len(sources)
             }
         }
         
         chats_db[chat_id] = chat_entry
+        
+        # Update project chat count
+        if project_id and project_id in projects_db:
+            projects_db[project_id]["chat_count"] = projects_db[project_id].get("chat_count", 0) + 1
+            projects_db[project_id]["updated_at"] = datetime.utcnow().isoformat()
+        
         save_data()
         
-        debug_logger.log(f"[CHAT] Chat processed: {message[:50]}...")
+        logger.info(f"Chat completed: {len(response_text)} chars response", "CHAT")
         
         return {
             "response": response_text,
             "chat_id": chat_id,
             "timestamp": chat_entry["timestamp"],
-            "metadata": chat_entry["metadata"],
-            "success": True
+            "project_id": project_id,
+            "sources": sources,
+            "success": True,
+            "model_info": {
+                "model": settings.GEMINI_MODEL,
+                "temperature": settings.TEMPERATURE,
+                "features_used": {
+                    "document_search": bool(context),
+                    "ai_generation": True,
+                    "context_enhancement": bool(context)
+                }
+            },
+            "intelligence_metadata": {
+                "context_length": len(context),
+                "sources_found": len(sources),
+                "processing_time": 0.5
+            }
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        debug_logger.log(f"[ERROR] Chat error: {e}", "error")
-        debug_logger.log(f"[ERROR] Chat error traceback: {traceback.format_exc()}", "error")
+        logger.error(f"Chat error: {e}", "CHAT")
+        logger.error(f"Traceback: {traceback.format_exc()}", "CHAT")
         
         return JSONResponse(
-            status_code=200,  # Return 200 but with error in response
+            status_code=200,
             content={
-                "response": "Sorry, I encountered an error processing your message. Please try again.",
+                "response": f"Entschuldigung, es gab einen Fehler bei der Verarbeitung: {str(e)}",
                 "error": str(e),
                 "success": False,
                 "timestamp": datetime.utcnow().isoformat()
@@ -523,9 +752,7 @@ async def simple_chat(request: Request):
                 "timestamp": datetime.utcnow().isoformat()
             }
         
-        response_text = f"Simple chat response: I received '{message}'. Backend is working great!"
-        
-        debug_logger.log(f"[SIMPLE-CHAT] Processed: {message[:50]}...")
+        response_text = f"Simple response: I received '{message}'. Backend is working perfectly! 🚀"
         
         return {
             "response": response_text,
@@ -535,7 +762,7 @@ async def simple_chat(request: Request):
         }
         
     except Exception as e:
-        debug_logger.log(f"[ERROR] Simple chat error: {e}", "error")
+        logger.error(f"Simple chat error: {e}", "CHAT")
         return {
             "response": "Sorry, there was an error processing your message.",
             "error": str(e),
@@ -543,7 +770,6 @@ async def simple_chat(request: Request):
             "timestamp": datetime.utcnow().isoformat()
         }
 
-# === Chat History Endpoint ===
 @app.get("/api/v1/chats/")
 async def get_chat_history(project_id: Optional[str] = None, limit: int = 50):
     """Get chat history"""
@@ -561,12 +787,12 @@ async def get_chat_history(project_id: Optional[str] = None, limit: int = 50):
         "project_id": project_id
     }
 
-# === Error Handlers ===
+# === Error Handler ===
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
+async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler"""
-    debug_logger.log(f"[ERROR] Unhandled exception: {exc}", "error")
-    debug_logger.log(f"Traceback: {traceback.format_exc()}", "error")
+    logger.error(f"Unhandled exception: {exc}", "ERROR")
+    logger.error(f"Traceback: {traceback.format_exc()}", "ERROR")
     
     return JSONResponse(
         status_code=500,
@@ -581,25 +807,22 @@ async def global_exception_handler(request, exc):
 # === Request Logging Middleware ===
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all requests for debugging"""
+    """Log all requests"""
     start_time = datetime.utcnow()
-    
-    # Log request
-    debug_logger.log(f"[REQUEST] {request.method} {request.url}")
     
     response = await call_next(request)
     
-    # Log response
     process_time = (datetime.utcnow() - start_time).total_seconds()
-    debug_logger.log(f"[RESPONSE] {response.status_code} - {process_time:.3f}s")
+    logger.info(f"{request.method} {request.url} - {response.status_code} - {process_time:.3f}s", "HTTP")
     
     return response
 
 # === Startup Messages ===
-debug_logger.log("[ROCKET] RagFlow Backend initialized")
-debug_logger.log(f"[FOLDER] Upload directory: {settings.UPLOAD_DIRECTORY}")
-debug_logger.log(f"[CONFIG] Environment: {settings.ENVIRONMENT}")
-debug_logger.log(f"[ROBOT] Document processor: {'Available' if PROCESSOR_AVAILABLE else 'Fallback mode'}")
+logger.info("RagFlow Backend initialized", "INIT")
+logger.info(f"Upload directory: {settings.UPLOAD_DIRECTORY}", "CONFIG")
+logger.info(f"Environment: {settings.ENVIRONMENT}", "CONFIG")
+logger.info(f"Google AI: {'Available' if GOOGLE_AI_AVAILABLE and settings.GOOGLE_API_KEY else 'Not configured'}", "CONFIG")
+logger.info(f"Document Processing: {'Available' if DOCUMENT_PROCESSING_AVAILABLE else 'Limited'}", "CONFIG")
 
 if __name__ == "__main__":
     import uvicorn

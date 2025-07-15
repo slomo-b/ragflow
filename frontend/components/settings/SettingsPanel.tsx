@@ -13,10 +13,10 @@ import {
   ShieldCheckIcon,
   TrashIcon
 } from '@heroicons/react/24/outline'
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/Button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { Input } from "@/components/ui/Input"
+import { Badge } from "@/components/ui/Badge"
 import { Separator } from "@/components/ui/separator"
 import { useTheme } from 'next-themes'
 import { useStore } from '@/stores/useStore'
