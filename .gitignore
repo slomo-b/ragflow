@@ -6,7 +6,7 @@ node_modules/
 .pnp
 .pnp.js
 
-# Package lock files (können bei Bedarf wieder hinzugefügt werden)
+# Package manager lock files (optional - entferne # falls du sie brauchst)
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
@@ -15,17 +15,15 @@ pnpm-lock.yaml
 .next/
 out/
 dist/
-
-# Production build
 build/
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Logs - alle Log-Dateien
+# Logs - ALLE log files
 logs/
 *.log
 npm-debug.log*
@@ -37,12 +35,9 @@ error*.log
 access*.log
 combined*.log
 
-# Runtime data
+# npm cache
 .npm
 .eslintcache
-
-# Optional npm cache directory
-.npm
 
 # Optional REPL history
 .node_repl_history
@@ -76,6 +71,8 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -92,12 +89,14 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/
+.nox/
 .coverage
 .coverage.*
 .cache
 nosetests.xml
 coverage.xml
 *.cover
+*.py,cover
 .hypothesis/
 .pytest_cache/
 
@@ -122,9 +121,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+.dmypy.json
+dmypy.json
 
 # === RAGFLOW SPECIFIC ===
-# Backend data and logs
+# Backend data und logs (KRITISCH!)
 backend/data/
 backend/logs/
 backend/uploads/
@@ -132,7 +133,14 @@ backend/*.log
 backend/backend_debug.log
 backend/debug_document_processing.log
 
-# AI models and large files
+# Upload Verzeichnisse
+uploads/
+documents/
+temp/
+tmp/
+cache/
+
+# AI Models und große Dateien
 *.bin
 *.model
 *.pkl
@@ -141,13 +149,9 @@ backend/debug_document_processing.log
 *.pt
 *.pth
 *.safetensors
-
-# Document uploads
-uploads/
-documents/
-temp/
-tmp/
-cache/
+*.tar.gz
+models/
+checkpoints/
 
 # === ENVIRONMENT & CONFIG ===
 # Environment variables
@@ -158,21 +162,30 @@ cache/
 .env.production.local
 .env.production
 
-# Config files with secrets
+# Config files mit secrets
 config.json
 secrets.json
 *.key
 *.pem
 *.crt
+*.p12
+*.pfx
+
+# === DATABASE FILES ===
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
 
 # === IDE & EDITOR ===
 # VS Code
 .vscode/settings.json
 .vscode/launch.json
-.vscode/extensions.json
 .vscode/tasks.json
-# Keep workspace files if needed
-# .vscode/
+.vscode/.ropeproject
+
+# Aber workspace file behalten falls nötig
+# !.vscode/extensions.json
 
 # IntelliJ IDEA
 .idea/
@@ -187,81 +200,144 @@ secrets.json
 # Vim
 *.swp
 *.swo
+.viminfo
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
 
 # === OPERATING SYSTEM ===
 # macOS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 .AppleDouble
 .LSOverride
 
 # Windows
 Thumbs.db
+Thumbs.db:encryptable
 ehthumbs.db
+ehthumbs_vista.db
 Desktop.ini
 $RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
 
 # Linux
 *~
+.fuse_hidden*
+.directory
+.Trash-*
 
 # === DOCKER ===
 # Docker
 .dockerignore
 docker-compose.override.yml
+.docker/
 
-# === LARGE FILES & MEDIA ===
-# Archive files
-*.zip
-*.tar.gz
-*.rar
-*.7z
-
-# Large media files (if not part of the app)
-*.mp4
-*.avi
-*.mov
-*.mkv
-*.mp3
-*.wav
-*.flac
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
+# === BACKUP & ARCHIVE FILES ===
 # Backup files
 *.bak
 *.backup
 *.old
 *.orig
+*.tmp
 *~
 
-# === LOGS & DEBUG FILES ===
-# All log files
-*.log
-*.log.*
-logs/
-log/
-debug/
-debug_*.log
-error_*.log
-access_*.log
-combined_*.log
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.gz
+*.bz2
+*.xz
 
+# === LARGE MEDIA FILES ===
+# Video files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.flv
+
+# Audio files
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+
+# Image files (falls nicht benötigt)
+# *.jpg
+# *.jpeg
+# *.png
+# *.gif
+# *.bmp
+# *.tiff
+
+# === LOGS & DEBUG FILES ===
 # Crash dumps
 *.dmp
 *.crash
+*.stackdump
+
+# Debug files
+debug/
+logs/
+log/
+
+# === SECURITY & CREDENTIALS ===
+# Credentials
+credentials.json
+token.json
+service-account*.json
+.htpasswd
+
+# SSH keys
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.pub
+
+# === FRONTEND SPECIFIC ===
+# Storybook
+storybook-static/
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+
+# Jest
+coverage/
 
 # === KEEP THESE FILES ===
-# Keep important config templates
+# Wichtige Config-Templates behalten
 !config.example.json
 !.env.example
 !docker-compose.yml
-!Dockerfile
+!Dockerfile*
 !README.md
 !requirements.txt
 !package.json
-# Aber package-lock.json ausschließen (siehe oben)
+# package-lock.json ist oben ausgeschlossen
 
-# Keep essential VS Code settings if needed
+# Essential VS Code settings if needed
 !.vscode/extensions.json
+!.vscode/settings.example.json
