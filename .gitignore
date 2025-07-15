@@ -6,6 +6,11 @@ node_modules/
 .pnp
 .pnp.js
 
+# Package lock files (können bei Bedarf wieder hinzugefügt werden)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
 # Next.js build output
 .next/
 out/
@@ -20,11 +25,17 @@ pids
 *.seed
 *.pid.lock
 
-# Logs
+# Logs - alle Log-Dateien
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+debug*.log
+error*.log
+access*.log
+combined*.log
 
 # Runtime data
 .npm
@@ -119,6 +130,7 @@ backend/logs/
 backend/uploads/
 backend/*.log
 backend/backend_debug.log
+backend/debug_document_processing.log
 
 # AI models and large files
 *.bin
@@ -126,12 +138,16 @@ backend/backend_debug.log
 *.pkl
 *.h5
 *.onnx
+*.pt
+*.pth
+*.safetensors
 
 # Document uploads
 uploads/
 documents/
 temp/
 tmp/
+cache/
 
 # === ENVIRONMENT & CONFIG ===
 # Environment variables
@@ -147,6 +163,7 @@ config.json
 secrets.json
 *.key
 *.pem
+*.crt
 
 # === IDE & EDITOR ===
 # VS Code
@@ -191,24 +208,49 @@ $RECYCLE.BIN/
 .dockerignore
 docker-compose.override.yml
 
-# === MISC ===
-# Backup files
-*.bak
-*.backup
-*.old
-*.orig
-
+# === LARGE FILES & MEDIA ===
 # Archive files
 *.zip
 *.tar.gz
 *.rar
+*.7z
 
 # Large media files (if not part of the app)
 *.mp4
 *.avi
 *.mov
+*.mkv
 *.mp3
 *.wav
+*.flac
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# === LOGS & DEBUG FILES ===
+# All log files
+*.log
+*.log.*
+logs/
+log/
+debug/
+debug_*.log
+error_*.log
+access_*.log
+combined_*.log
+
+# Crash dumps
+*.dmp
+*.crash
 
 # === KEEP THESE FILES ===
 # Keep important config templates
@@ -219,7 +261,7 @@ docker-compose.override.yml
 !README.md
 !requirements.txt
 !package.json
-!package-lock.json
+# Aber package-lock.json ausschließen (siehe oben)
 
 # Keep essential VS Code settings if needed
 !.vscode/extensions.json
