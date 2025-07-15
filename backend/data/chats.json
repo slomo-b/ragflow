@@ -399,5 +399,157 @@
       "sources_found": 0,
       "prompt_enhanced": true
     }
+  },
+  "c3f0165c-a8a2-4c69-8156-d791888db33e": {
+    "id": "c3f0165c-a8a2-4c69-8156-d791888db33e",
+    "project_id": "sqmuliqub",
+    "user_message": "hi",
+    "ai_response": "Hi there! How can I help you today?\n",
+    "timestamp": "2025-07-15T22:21:34.092042",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "f4b91db1-506c-4801-b574-d9c59a8a8c29": {
+    "id": "f4b91db1-506c-4801-b574-d9c59a8a8c29",
+    "project_id": "sqmuliqub",
+    "user_message": "was steht in der textdatei",
+    "ai_response": "Both documents, `c88430a3-56a7-453b-bfb9-bd3fd7c899b8` and `095fdd4f-89f6-4145-b539-4217cd90fd19`, contain the same text, which appears to be a menu (Antipasti section) from a restaurant.  The text lists four antipasti dishes with their names in Italian, descriptions, and prices in Swiss Francs (CHF):\n\n* **L’INSALATA DI MISTICANZA (CHF 16.50):** A mixed salad with various fresh seasonal greens and raw vegetables, Pane Carasau (a type of bread), and homemade dressing.\n* **LA PARMIGIANA BUFALINA (CHF 22.50):** Homemade eggplant casserole with San Marzano sauce, Parmesan cheese, basil, and Buffalo mozzarella DOP.\n* **FIOR DI PRIMAVERA (CHF 26.50):** Crispy zucchini blossoms filled with Pecorino Romano cheese, served on roasted red pepper cream, green asparagus, and lime yogurt.\n* **IL POLIPO D’AUTORE (CHF 29.50):**  The description is cut off, but it starts with \"Gebratener O...\" (Roasted O...).\n\n\nThe provided text only shows a part of the menu; it's likely that more dishes are listed on subsequent pages.\n",
+    "timestamp": "2025-07-15T22:22:28.153875",
+    "sources": [
+      {
+        "id": "c88430a3-56a7-453b-bfb9-bd3fd7c899b8",
+        "filename": "Abendkarte_210325.pdf",
+        "excerpt": "[Seite 1] ANTIPASTI L’INSALATA DI MISTICANZA CHF 16.50 Verschiedene frische und knackige saisonale Blatt- und Rohkostsalate mit <Pane Carasau> und hausgemachtem Dressing. LA PARMIGIANA BUFALINA CHF 22...",
+        "relevance_score": 0.0026041666666666665
+      },
+      {
+        "id": "095fdd4f-89f6-4145-b539-4217cd90fd19",
+        "filename": "Abendkarte_210325.pdf",
+        "excerpt": "[Seite 1] ANTIPASTI L’INSALATA DI MISTICANZA CHF 16.50 Verschiedene frische und knackige saisonale Blatt- und Rohkostsalate mit <Pane Carasau> und hausgemachtem Dressing. LA PARMIGIANA BUFALINA CHF 22...",
+        "relevance_score": 0.0026041666666666665
+      }
+    ],
+    "context_used": true,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 1120,
+      "sources_count": 2
+    }
+  },
+  "666e5038-4cc3-42eb-894c-d8d0f3b7ec57": {
+    "id": "666e5038-4cc3-42eb-894c-d8d0f3b7ec57",
+    "project_id": "sqmuliqub",
+    "user_message": "hi",
+    "ai_response": "Hi there! How can I help you today?  I need more information to be of assistance.  Please tell me what you'd like to do or what you'd like me to analyze.\n",
+    "timestamp": "2025-07-15T22:29:41.405305",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "84837ec2-5282-4ec4-8ddc-5453ed4681d5": {
+    "id": "84837ec2-5282-4ec4-8ddc-5453ed4681d5",
+    "project_id": "sqmuliqub",
+    "user_message": "Summarize my documents",
+    "ai_response": "Please provide me with the documents you want me to summarize.  I need the text of the documents to be able to give you a helpful summary.\n",
+    "timestamp": "2025-07-15T22:33:15.118512",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "380a36fa-1d7e-4065-8405-ec4729bdcb5d": {
+    "id": "380a36fa-1d7e-4065-8405-ec4729bdcb5d",
+    "project_id": "sqmuliqub",
+    "user_message": "Summarize my documents",
+    "ai_response": "Please provide me with the documents you would like me to summarize. I need the text of the documents to be able to help you.\n",
+    "timestamp": "2025-07-15T22:33:43.276358",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "3393c7b4-2a03-425d-9ae7-020a4a5ef215": {
+    "id": "3393c7b4-2a03-425d-9ae7-020a4a5ef215",
+    "project_id": "sqmuliqub",
+    "user_message": "Summarize my documents",
+    "ai_response": "Please provide me with the documents you want me to summarize. I need the text of the documents to be able to create a summary for you.\n",
+    "timestamp": "2025-07-15T22:36:47.346544",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "4c32867a-c26f-49bb-8081-00a693c1a785": {
+    "id": "4c32867a-c26f-49bb-8081-00a693c1a785",
+    "project_id": "sqmuliqub",
+    "user_message": "Summarize my documents",
+    "ai_response": "Please provide me with the documents you want me to summarize.  I need the text of the documents to be able to help you.\n",
+    "timestamp": "2025-07-15T22:37:10.228425",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "1ebeb155-62a8-44ab-adae-459efeb8c8ea": {
+    "id": "1ebeb155-62a8-44ab-adae-459efeb8c8ea",
+    "project_id": "sqmuliqub",
+    "user_message": "was ist in der textdatei",
+    "ai_response": "Die Anfrage ist etwas unklar, da nicht spezifiziert ist, welche Textdatei gemeint ist. Es gibt drei Dokumente mit den IDs f56014be-a19d-48b5-9f99-212334f2130e, c88430a3-56a7-453b-bfb9-bd3fd7c899b8 und 095fdd4f-89f6-4145-b539-4217cd90fd19.\n\n* **Dokument f56014be-a19d-48b5-9f99-212334f2130e:**  Enthält einen deutschen Testtext für ein RagFlow Backend. Der Text ist kurz und besteht aus Überschriften und einer kurzen Liste.\n\n* **Dokumente c88430a3-56a7-453b-bfb9-bd3fd7c899b8 und 095fdd4f-89f6-4145-b539-4217cd90fd19:**  Diese beiden Dokumente sind identisch und scheinen eine Speisekarte (Antipasti) zu sein. Sie listen verschiedene Gerichte mit Preisen in Schweizer Franken (CHF) auf, inklusive Beschreibungen der jeweiligen Speisen.\n\n\nUm eine präzisere Antwort zu geben, bitte ich um die Angabe der konkreten Dokument-ID.\n",
+    "timestamp": "2025-07-15T22:37:35.520127",
+    "sources": [
+      {
+        "id": "f56014be-a19d-48b5-9f99-212334f2130e",
+        "filename": "test_document.md",
+        "excerpt": "# Test Dokument Dies ist ein Test-Dokument für das RagFlow Backend. ## Inhalt - Erste Zeile - Zweite Zeile - Dritte Zeile Das Backend sollte dieses Dokument verarbeiten können....",
+        "relevance_score": 0.037037037037037035
+      },
+      {
+        "id": "c88430a3-56a7-453b-bfb9-bd3fd7c899b8",
+        "filename": "Abendkarte_210325.pdf",
+        "excerpt": "[Seite 1] ANTIPASTI L’INSALATA DI MISTICANZA CHF 16.50 Verschiedene frische und knackige saisonale Blatt- und Rohkostsalate mit <Pane Carasau> und hausgemachtem Dressing. LA PARMIGIANA BUFALINA CHF 22...",
+        "relevance_score": 0.0026041666666666665
+      },
+      {
+        "id": "095fdd4f-89f6-4145-b539-4217cd90fd19",
+        "filename": "Abendkarte_210325.pdf",
+        "excerpt": "[Seite 1] ANTIPASTI L’INSALATA DI MISTICANZA CHF 16.50 Verschiedene frische und knackige saisonale Blatt- und Rohkostsalate mit <Pane Carasau> und hausgemachtem Dressing. LA PARMIGIANA BUFALINA CHF 22...",
+        "relevance_score": 0.0026041666666666665
+      }
+    ],
+    "context_used": true,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 1357,
+      "sources_count": 3
+    }
   }
 }
