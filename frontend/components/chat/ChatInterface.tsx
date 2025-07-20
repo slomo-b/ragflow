@@ -1,490 +1,228 @@
 // frontend/components/chat/ChatInterface.tsx
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+'use client'
+
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Send, 
-  StopCircle, 
-  Sparkles, 
-  Copy, 
-  Check, 
   MessageSquare,
-  FileText,
   User,
   Bot,
   AlertCircle,
   RefreshCw,
-  Zap,
-  CheckCircle,
-  Clock,
-  WifiOff,
-  Search,
+  Trash2,
+  Copy,
+  Check,
+  Settings,
+  Loader2,
+  FileText,
   Database,
-  Brain
+  Sparkles,
+  WifiOff,
+  Zap
 } from 'lucide-react'
-import { Button } from "@/components/ui/Button"
-import { Badge } from "@/components/ui/Badge"
-import { cn } from '@/lib/utils'
-import { useStore } from '@/stores/useStore'
 import toast from 'react-hot-toast'
+import { ChatAPI, ProjectAPI, handleAPIError, withErrorHandling, testAPIConnection } from '@/lib/api'
 
-// ===== ENHANCED TYPES =====
-interface Source {
-  id: string
-  filename: string
-  excerpt: string
-  relevance_score: number
-  search_methods?: string[]
-  type: string
-}
-
-interface Message {
+// Enhanced Types
+interface ChatMessage {
   id: string
   content: string
   role: 'user' | 'assistant'
   timestamp: string
-  sources?: Source[]
+  sources?: Array<{
+    document_id: string
+    content: string
+    score: number
+    metadata: Record<string, any>
+  }>
   status?: 'sending' | 'sent' | 'error'
-  model_info?: {
-    model: string
-    context_used: boolean
-    context_length: number
-    features_used?: Record<string, boolean>
-  }
-  intelligence_metadata?: {
-    sources_found: number
-    context_enhanced: boolean
-    processing_method: string
-    search_methods_used?: string[]
-  }
-}
-
-interface ChatResponse {
-  response: string
-  chat_id?: string
-  timestamp: string
-  project_id?: string
-  sources?: Source[]
-  success: boolean
-  model_info?: {
-    model: string
-    context_used: boolean
-    context_length: number
-    features_used: Record<string, boolean>
-  }
-  intelligence_metadata?: {
-    sources_found: number
-    context_enhanced: boolean
-    processing_method: string
-    search_methods_used: string[]
-  }
   error?: string
 }
 
-// ===== OPTIMIZED CHAT API =====
-class OptimizedChatAPI {
-  private static readonly BASE_URL = 'http://localhost:8000'
-  private static controller: AbortController | null = null
-
-  static cancelRequest() {
-    if (this.controller) {
-      this.controller.abort()
-      this.controller = null
-    }
-  }
-
-  static async sendMessage(content: string, projectId?: string): Promise<ChatResponse> {
-    console.log('🚀 Sending optimized chat message:', { 
-      content: content.substring(0, 50) + '...', 
-      projectId 
-    })
-    
-    // Cancel any existing request
-    this.cancelRequest()
-    this.controller = new AbortController()
-    
-    const payload = {
-      message: content,
-      project_id: projectId || null,
-      use_documents: true,
-      model: 'gemini-1.5-flash'
-    }
-
-    try {
-      const response = await fetch(`${this.BASE_URL}/api/v1/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        signal: this.controller.signal,
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || data.detail || 'Chat request failed')
-      }
-
-      console.log('✅ Chat response received:', {
-        success: data.success,
-        sourcesCount: data.sources?.length || 0,
-        contextUsed: data.model_info?.context_used,
-        processingMethod: data.intelligence_metadata?.processing_method
-      })
-
-      return {
-        ...data,
-        success: true
-      }
-
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        throw new Error('Request cancelled')
-      }
-      
-      console.error('❌ Chat request failed:', error)
-      throw new Error(error.message || 'Failed to send message')
-    } finally {
-      this.controller = null
-    }
-  }
-
-  static async testConnection(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.BASE_URL}/api/health`)
-      return response.ok
-    } catch {
-      return false
-    }
-  }
-
-  static async getSystemStatus(): Promise<any> {
-    try {
-      const response = await fetch(`${this.BASE_URL}/api/v1/system/status`)
-      if (response.ok) {
-        return await response.json()
-      }
-      return null
-    } catch {
-      return null
-    }
-  }
+interface Project {
+  id: string
+  name: string
+  description: string
+  document_count: number
 }
 
-// ===== SOURCE DISPLAY COMPONENT =====
-const SourceCard: React.FC<{ source: Source }> = ({ source }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
-  
-  const getMethodIcon = (method: string) => {
-    switch (method) {
-      case 'tfidf': return <Search className="w-3 h-3" />
-      case 'semantic': return <Brain className="w-3 h-3" />
-      default: return <Database className="w-3 h-3" />
-    }
-  }
-  
-  const getMethodColor = (method: string) => {
-    switch (method) {
-      case 'tfidf': return 'bg-blue-100 text-blue-800'
-      case 'semantic': return 'bg-purple-100 text-purple-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow"
-    >
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-gray-500" />
-          <span className="font-medium text-sm truncate">{source.filename}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Badge variant="secondary" className="text-xs">
-            {(source.relevance_score * 100).toFixed(0)}%
-          </Badge>
-        </div>
-      </div>
-      
-      {source.search_methods && source.search_methods.length > 0 && (
-        <div className="flex gap-1 mb-2">
-          {source.search_methods.map((method, idx) => (
-            <span
-              key={idx}
-              className={cn(
-                "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",
-                getMethodColor(method)
-              )}
-            >
-              {getMethodIcon(method)}
-              {method}
-            </span>
-          ))}
-        </div>
-      )}
-      
-      <div className="text-sm text-gray-600">
-        {isExpanded ? source.excerpt : `${source.excerpt.substring(0, 100)}...`}
-        {source.excerpt.length > 100 && (
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="ml-2 text-blue-600 hover:text-blue-800 font-medium"
-          >
-            {isExpanded ? 'Weniger' : 'Mehr'}
-          </button>
-        )}
-      </div>
-    </motion.div>
-  )
+interface ChatStats {
+  totalMessages: number
+  responseTime: number
+  lastActivity: string
 }
 
-// ===== MESSAGE COMPONENT =====
-const MessageBubble: React.FC<{ message: Message }> = ({ message }) => {
-  const [copied, setCopied] = useState(false)
-  
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(message.content)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-      toast.success('Nachricht kopiert!')
-    } catch {
-      toast.error('Kopieren fehlgeschlagen')
-    }
-  }
-
-  const isUser = message.role === 'user'
-  const isError = message.status === 'error'
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className={cn(
-        "flex gap-3 mb-6",
-        isUser ? "justify-end" : "justify-start"
-      )}
-    >
-      {!isUser && (
-        <div className="flex-shrink-0">
-          <div className={cn(
-            "w-8 h-8 rounded-full flex items-center justify-center",
-            isError ? "bg-red-100" : "bg-blue-100"
-          )}>
-            {isError ? (
-              <AlertCircle className="w-4 h-4 text-red-600" />
-            ) : (
-              <Bot className="w-4 h-4 text-blue-600" />
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className={cn(
-        "max-w-[80%] space-y-2",
-        isUser ? "order-1" : "order-2"
-      )}>
-        {/* Message Bubble */}
-        <div className={cn(
-          "rounded-2xl px-4 py-3 shadow-sm",
-          isUser 
-            ? "bg-blue-600 text-white ml-auto" 
-            : isError 
-              ? "bg-red-50 border border-red-200 text-red-800"
-              : "bg-gray-50 border border-gray-200"
-        )}>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
-            {message.content}
-          </div>
-          
-          {/* Message Actions */}
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-opacity-20">
-            <span className="text-xs opacity-70">
-              {new Date(message.timestamp).toLocaleTimeString('de-DE', {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </span>
-            
-            <div className="flex items-center gap-1">
-              {message.status === 'sending' && (
-                <RefreshCw className="w-3 h-3 animate-spin" />
-              )}
-              {message.status === 'sent' && (
-                <CheckCircle className="w-3 h-3" />
-              )}
-              <button
-                onClick={copyToClipboard}
-                className="p-1 rounded hover:bg-black hover:bg-opacity-10 transition-colors"
-              >
-                {copied ? (
-                  <Check className="w-3 h-3" />
-                ) : (
-                  <Copy className="w-3 h-3" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Intelligence Metadata */}
-        {!isUser && message.intelligence_metadata && (
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <Zap className="w-3 h-3" />
-            <span>
-              {message.intelligence_metadata.processing_method} • 
-              {message.intelligence_metadata.sources_found} Quellen • 
-              {message.intelligence_metadata.context_enhanced ? 'Kontext erweitert' : 'Basis-Antwort'}
-            </span>
-            {message.intelligence_metadata.search_methods_used && 
-             message.intelligence_metadata.search_methods_used.length > 0 && (
-              <span>• {message.intelligence_metadata.search_methods_used.join(', ')}</span>
-            )}
-          </div>
-        )}
-
-        {/* Sources */}
-        {!isUser && message.sources && message.sources.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <FileText className="w-4 h-4" />
-              Quellen ({message.sources.length})
-            </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {message.sources.map((source, idx) => (
-                <SourceCard key={idx} source={source} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {isUser && (
-        <div className="flex-shrink-0 order-2">
-          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-            <User className="w-4 h-4 text-green-600" />
-          </div>
-        </div>
-      )}
-    </motion.div>
-  )
-}
-
-// ===== MAIN CHAT INTERFACE COMPONENT =====
 export const ChatInterface: React.FC = () => {
-  const { currentProject } = useStore()
-  const [messages, setMessages] = useState<Message[]>([])
-  const [inputValue, setInputValue] = useState('')
+  // State Management
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking')
-  const [systemStatus, setSystemStatus] = useState<any>(null)
-  
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
+  const [stats, setStats] = useState<ChatStats>({
+    totalMessages: 0,
+    responseTime: 0,
+    lastActivity: ''
+  })
+
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-
-  // Check connection status
-  const checkConnection = useCallback(async () => {
-    setConnectionStatus('checking')
-    try {
-      const isConnected = await OptimizedChatAPI.testConnection()
-      const status = await OptimizedChatAPI.getSystemStatus()
-      
-      setConnectionStatus(isConnected ? 'connected' : 'disconnected')
-      setSystemStatus(status)
-      
-      if (!isConnected) {
-        toast.error('Backend-Verbindung fehlgeschlagen')
-      }
-    } catch {
-      setConnectionStatus('disconnected')
-      setSystemStatus(null)
-    }
-  }, [])
+  const startTimeRef = useRef<number>(0)
 
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  // Send message
-  const sendMessage = useCallback(async () => {
-    if (!inputValue.trim() || isLoading) return
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, scrollToBottom])
 
-    const userMessage: Message = {
+  // Load projects and test connection on mount
+  useEffect(() => {
+    initializeChat()
+  }, [])
+
+  const initializeChat = async () => {
+    console.log('🚀 Initializing chat interface...')
+    
+    // Test API connection first
+    setConnectionStatus('checking')
+    try {
+      const testResults = await testAPIConnection()
+      
+      if (testResults.health) {
+        setConnectionStatus('connected')
+        console.log('✅ Backend connection established')
+        
+        // Load projects if available
+        if (testResults.projects) {
+          const projectsData = testResults.details.projects as Project[]
+          setProjects(projectsData)
+          console.log(`📁 Loaded ${projectsData.length} projects`)
+          
+          // Auto-select first project if available
+          if (projectsData.length > 0) {
+            setSelectedProjectId(projectsData[0].id)
+            console.log(`🎯 Auto-selected project: ${projectsData[0].name}`)
+          }
+        }
+        
+        // Show connection status
+        toast.success('Connected to RagFlow backend!', { duration: 2000 })
+      } else {
+        setConnectionStatus('disconnected')
+        console.warn('❌ Backend connection failed')
+        toast.error('Backend connection failed. Please check if the server is running.')
+      }
+    } catch (error) {
+      setConnectionStatus('disconnected')
+      console.error('💥 Initialization failed:', error)
+      toast.error('Failed to initialize chat. Please refresh the page.')
+    }
+  }
+
+  // Handle message sending
+  const sendMessage = useCallback(async () => {
+    if (!input.trim() || isLoading) return
+
+    const messageContent = input.trim()
+    setInput('')
+    
+    // Start timing for response time
+    startTimeRef.current = Date.now()
+
+    // Create user message
+    const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
-      content: inputValue.trim(),
+      content: messageContent,
       role: 'user',
       timestamp: new Date().toISOString(),
       status: 'sent'
     }
 
-    setMessages(prev => [...prev, userMessage])
-    setInputValue('')
-    setIsLoading(true)
-
-    // Add loading indicator
-    const loadingMessage: Message = {
+    // Create assistant message placeholder
+    const assistantMessage: ChatMessage = {
       id: `assistant-${Date.now()}`,
-      content: 'Analysiere Dokumente und erstelle Antwort...',
+      content: '',
       role: 'assistant',
       timestamp: new Date().toISOString(),
       status: 'sending'
     }
-    setMessages(prev => [...prev, loadingMessage])
+
+    setMessages(prev => [...prev, userMessage, assistantMessage])
+    setIsLoading(true)
+
+    console.log(`💬 Sending message: "${messageContent}"`)
+    console.log(`📁 Selected project: ${selectedProjectId || 'None'}`)
 
     try {
-      const response = await OptimizedChatAPI.sendMessage(
-        userMessage.content,
-        currentProject?.id
-      )
-
-      if (response.success) {
-        const assistantMessage: Message = {
-          id: response.chat_id || `assistant-${Date.now()}`,
-          content: response.response,
-          role: 'assistant',
-          timestamp: response.timestamp,
-          sources: response.sources,
-          status: 'sent',
-          model_info: response.model_info,
-          intelligence_metadata: response.intelligence_metadata
-        }
-
-        setMessages(prev => prev.slice(0, -1).concat(assistantMessage))
-        
-        // Show success toast with details
-        if (response.sources && response.sources.length > 0) {
-          toast.success(`Antwort mit ${response.sources.length} Quellen generiert`)
-        } else {
-          toast.success('Antwort generiert')
-        }
-      } else {
-        throw new Error(response.error || 'Unbekannter Fehler')
-      }
-
-    } catch (error: any) {
-      console.error('Chat error:', error)
+      const response = await ChatAPI.sendMessage(messageContent, selectedProjectId || undefined)
       
-      const errorMessage: Message = {
-        id: `error-${Date.now()}`,
-        content: `Fehler: ${error.message}`,
-        role: 'assistant',
-        timestamp: new Date().toISOString(),
-        status: 'error'
+      // Calculate response time
+      const responseTime = Date.now() - startTimeRef.current
+      
+      // Update assistant message with response
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessage.id 
+          ? {
+              ...msg,
+              content: response.response,
+              sources: response.sources?.map(sourceId => ({
+                document_id: sourceId,
+                content: '',
+                score: 0,
+                metadata: {}
+              })),
+              status: 'sent'
+            }
+          : msg
+      ))
+
+      // Update stats
+      setStats(prev => ({
+        totalMessages: prev.totalMessages + 1,
+        responseTime,
+        lastActivity: new Date().toISOString()
+      }))
+
+      console.log(`✅ Message sent successfully in ${responseTime}ms`)
+      
+      // Show success feedback
+      if (response.sources && response.sources.length > 0) {
+        toast.success(`Response generated with ${response.sources.length} source(s)`)
+      } else {
+        toast.success('Message sent successfully')
       }
 
-      setMessages(prev => prev.slice(0, -1).concat(errorMessage))
-      toast.error('Fehler beim Senden der Nachricht')
+    } catch (error) {
+      console.error('💥 Chat error:', error)
+      
+      const errorMessage = handleAPIError(error)
+      
+      // Update assistant message with error
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessage.id 
+          ? {
+              ...msg,
+              content: `Sorry, I encountered an error: ${errorMessage}`,
+              status: 'error',
+              error: errorMessage
+            }
+          : msg
+      ))
+
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
-  }, [inputValue, isLoading, currentProject])
+  }, [input, isLoading, selectedProjectId])
 
-  // Handle key press
+  // Handle input key press
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -492,165 +230,377 @@ export const ChatInterface: React.FC = () => {
     }
   }, [sendMessage])
 
-  // Effects
-  useEffect(() => {
-    checkConnection()
-    const interval = setInterval(checkConnection, 30000) // Check every 30s
-    return () => clearInterval(interval)
-  }, [checkConnection])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, scrollToBottom])
-
-  useEffect(() => {
-    inputRef.current?.focus()
+  // Copy message content
+  const copyMessage = useCallback(async (messageId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedMessageId(messageId)
+      toast.success('Message copied to clipboard')
+      setTimeout(() => setCopiedMessageId(null), 2000)
+    } catch (error) {
+      console.error('Failed to copy:', error)
+      toast.error('Failed to copy message')
+    }
   }, [])
 
-  // Welcome message
-  const welcomeMessage = useMemo(() => {
-    if (!currentProject) {
-      return "Hallo! Bitte wählen Sie ein Projekt aus, um mit Ihren Dokumenten zu chatten."
-    }
-    
-    const docCount = systemStatus?.data?.documents || 0
-    const ragDocs = systemStatus?.components?.rag_system?.documents || 0
-    
-    return `Hallo! Ich bin bereit, Ihre Fragen zu den Dokumenten in "${currentProject.name}" zu beantworten. ${docCount > 0 ? `${ragDocs} Dokumente sind durchsuchbar.` : 'Bitte laden Sie Dokumente hoch, um zu beginnen.'}`
-  }, [currentProject, systemStatus])
+  // Clear chat
+  const clearChat = useCallback(() => {
+    setMessages([])
+    setStats(prev => ({ ...prev, totalMessages: 0 }))
+    toast.success('Chat cleared')
+  }, [])
 
-  return (
-    <div className="flex flex-col h-full bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <MessageSquare className="w-6 h-6 text-blue-600" />
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Chat mit Dokumenten
-              </h2>
-              {currentProject && (
-                <p className="text-sm text-gray-500">
-                  Projekt: {currentProject.name}
-                </p>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            {/* Connection Status */}
-            <div className="flex items-center gap-2">
-              <div className={cn(
-                "w-2 h-2 rounded-full",
-                connectionStatus === 'connected' ? 'bg-green-500' :
-                connectionStatus === 'disconnected' ? 'bg-red-500' :
-                'bg-yellow-500'
-              )} />
-              <span className="text-sm text-gray-600">
-                {connectionStatus === 'connected' ? 'Verbunden' :
-                 connectionStatus === 'disconnected' ? 'Getrennt' :
-                 'Prüfend...'}
-              </span>
-            </div>
+  // Refresh connection
+  const refreshConnection = useCallback(() => {
+    initializeChat()
+  }, [])
 
-            {/* System Status */}
-            {systemStatus && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Database className="w-4 h-4" />
-                <span>
-                  {systemStatus.data?.documents || 0} Docs, 
-                  {systemStatus.components?.rag_system?.chunks || 0} Chunks
-                </span>
+  // Message Component
+  const MessageComponent: React.FC<{ message: ChatMessage; index: number }> = ({ message, index }) => {
+    const isUser = message.role === 'user'
+    const isError = message.status === 'error'
+    const isSending = message.status === 'sending'
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.1 }}
+        className={`flex gap-4 p-4 rounded-lg ${
+          isUser ? 'bg-blue-50 ml-12' : isError ? 'bg-red-50' : 'bg-white'
+        }`}
+      >
+        {/* Avatar */}
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
+          isUser ? 'bg-blue-500' : isError ? 'bg-red-500' : 'bg-gray-700'
+        }`}>
+          {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm text-gray-900">
+              {isUser ? 'You' : 'Assistant'}
+            </span>
+            <span className="text-xs text-gray-500">
+              {new Date(message.timestamp).toLocaleTimeString()}
+            </span>
+            {isSending && (
+              <div className="flex items-center gap-1 text-xs text-blue-600">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Thinking...
               </div>
             )}
+            {isError && (
+              <div className="flex items-center gap-1 text-xs text-red-600">
+                <AlertCircle className="w-3 h-3" />
+                Error
+              </div>
+            )}
+          </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={checkConnection}
-              disabled={connectionStatus === 'checking'}
+          {/* Message Content */}
+          <div className="prose prose-sm max-w-none">
+            <p className="text-gray-800 whitespace-pre-wrap">{message.content}</p>
+          </div>
+
+          {/* Sources */}
+          {message.sources && message.sources.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <FileText className="w-4 h-4" />
+                <span>Sources ({message.sources.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {message.sources.map((source, idx) => (
+                  <div key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded flex items-center gap-1">
+                    <Database className="w-3 h-3" />
+                    Document {idx + 1}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          {!isSending && (
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={() => copyMessage(message.id, message.content)}
+                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100"
+              >
+                {copiedMessageId === message.id ? (
+                  <Check className="w-3 h-3" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+                {copiedMessageId === message.id ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    )
+  }
+
+  return (
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <MessageSquare className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">AI Chat</h1>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className={`w-2 h-2 rounded-full ${
+                  connectionStatus === 'connected' ? 'bg-green-500' : 
+                  connectionStatus === 'checking' ? 'bg-yellow-500' : 'bg-red-500'
+                }`} />
+                <span>
+                  {connectionStatus === 'connected' ? 'Connected' : 
+                   connectionStatus === 'checking' ? 'Connecting...' : 'Disconnected'}
+                </span>
+                {selectedProjectId && (
+                  <>
+                    <span>•</span>
+                    <span>{projects.find(p => p.id === selectedProjectId)?.name || 'Selected Project'}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Header Actions */}
+          <div className="flex items-center gap-2">
+            {/* Project Selector */}
+            <select
+              value={selectedProjectId || ''}
+              onChange={(e) => setSelectedProjectId(e.target.value || null)}
+              className="text-sm border border-gray-300 rounded px-2 py-1 bg-white"
+              disabled={projects.length === 0}
             >
-              <RefreshCw className={cn(
-                "w-4 h-4 mr-2",
-                connectionStatus === 'checking' && "animate-spin"
-              )} />
-              Aktualisieren
-            </Button>
+              <option value="">No Project</option>
+              {projects.map(project => (
+                <option key={project.id} value={project.id}>
+                  {project.name} ({project.document_count} docs)
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={refreshConnection}
+              disabled={connectionStatus === 'checking'}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
+              title="Refresh connection"
+            >
+              <RefreshCw className={`w-4 h-4 ${connectionStatus === 'checking' ? 'animate-spin' : ''}`} />
+            </button>
+
+            <button
+              onClick={clearChat}
+              disabled={messages.length === 0}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded disabled:opacity-50"
+              title="Clear chat"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
+
+        {/* Stats Bar */}
+        {stats.totalMessages > 0 && (
+          <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
+            <div className="flex items-center gap-1">
+              <MessageSquare className="w-3 h-3" />
+              {stats.totalMessages} messages
+            </div>
+            {stats.responseTime > 0 && (
+              <div className="flex items-center gap-1">
+                <Zap className="w-3 h-3" />
+                {stats.responseTime}ms avg
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              AI-powered responses
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md">
-              <Bot className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Bereit für Ihre Fragen
-              </h3>
-              <p className="text-gray-600">
-                {welcomeMessage}
-              </p>
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {connectionStatus === 'disconnected' && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center gap-2 text-red-700 mb-2">
+              <WifiOff className="w-4 h-4" />
+              <span className="font-medium">Backend Disconnected</span>
             </div>
+            <p className="text-sm text-red-600 mb-3">
+              Unable to connect to the RagFlow backend. Please make sure the server is running on http://localhost:8000
+            </p>
+            <button
+              onClick={refreshConnection}
+              className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200"
+            >
+              Retry Connection
+            </button>
           </div>
         )}
 
         <AnimatePresence>
-          {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
+          {messages.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-12"
+            >
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Sparkles className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Start a conversation</h3>
+              <p className="text-gray-600 max-w-md mx-auto mb-4">
+                Ask questions about your documents, get insights, or explore your knowledge base with AI.
+              </p>
+              
+              {/* Quick Start Tips */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto mt-8">
+                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+                  <MessageSquare className="w-6 h-6 text-blue-500 mx-auto mb-2" />
+                  <h4 className="font-medium text-gray-900 mb-1">Ask Questions</h4>
+                  <p className="text-xs text-gray-600">Ask about your uploaded documents</p>
+                </div>
+                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+                  <FileText className="w-6 h-6 text-green-500 mx-auto mb-2" />
+                  <h4 className="font-medium text-gray-900 mb-1">Get Insights</h4>
+                  <p className="text-xs text-gray-600">Extract key information and summaries</p>
+                </div>
+                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+                  <Database className="w-6 h-6 text-purple-500 mx-auto mb-2" />
+                  <h4 className="font-medium text-gray-900 mb-1">Search Content</h4>
+                  <p className="text-xs text-gray-600">Find relevant information across documents</p>
+                </div>
+              </div>
+
+              {/* Example Questions */}
+              <div className="mt-8">
+                <p className="text-sm text-gray-500 mb-3">Try asking:</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {[
+                    "What are the main topics in my documents?",
+                    "Summarize the key findings",
+                    "Find information about..."
+                  ].map((question, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setInput(question)}
+                      className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors"
+                    >
+                      "{question}"
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            messages.map((message, index) => (
+              <MessageComponent key={message.id} message={message} index={index} />
+            ))
+          )}
         </AnimatePresence>
-        
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="bg-white border-t border-gray-200 px-6 py-4">
+      {/* Input Area */}
+      <div className="bg-white border-t border-gray-200 p-4">
         <div className="flex gap-3">
           <div className="flex-1 relative">
             <textarea
               ref={inputRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyPress}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
               placeholder={
-                !currentProject 
-                  ? "Wählen Sie zuerst ein Projekt aus..."
-                  : connectionStatus !== 'connected'
-                    ? "Keine Verbindung zum Backend..."
-                    : "Stellen Sie Fragen zu Ihren Dokumenten..."
+                connectionStatus === 'disconnected' 
+                  ? "Backend disconnected - please check connection" 
+                  : selectedProjectId 
+                    ? "Ask a question about your documents..." 
+                    : "Ask a question (select a project for document-specific answers)..."
               }
-              disabled={!currentProject || connectionStatus !== 'connected' || isLoading}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+              disabled={isLoading || connectionStatus === 'disconnected'}
+              className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 pr-16 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               rows={1}
-              style={{ 
-                minHeight: '48px',
-                maxHeight: '120px',
-                height: 'auto'
-              }}
+              style={{ minHeight: '44px', maxHeight: '120px' }}
             />
+            
+            {/* Character count */}
+            <div className="absolute bottom-2 right-2 text-xs text-gray-400">
+              {input.length}/1000
+            </div>
           </div>
-          
-          <Button
+
+          {/* Send Button */}
+          <button
             onClick={sendMessage}
-            disabled={!inputValue.trim() || !currentProject || connectionStatus !== 'connected' || isLoading}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400"
+            disabled={!input.trim() || input.length > 1000 || isLoading || connectionStatus === 'disconnected'}
+            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+              isLoading 
+                ? 'bg-gray-100 text-gray-400' 
+                : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-md hover:shadow-lg'
+            }`}
           >
             {isLoading ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Sending...</span>
+              </div>
             ) : (
-              <Send className="w-4 h-4" />
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4" />
+                <span>Send</span>
+              </div>
             )}
-          </Button>
+          </button>
         </div>
-        
-        {!currentProject && (
-          <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" />
-            Bitte wählen Sie ein Projekt aus, um mit Dokumenten zu chatten.
-          </p>
+
+        {/* Input Hints */}
+        <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+          <div className="flex items-center gap-4">
+            {connectionStatus === 'connected' && (
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span>Backend connected</span>
+              </div>
+            )}
+            {selectedProjectId && (
+              <div className="flex items-center gap-1">
+                <FileText className="w-3 h-3" />
+                <span>Using project: {projects.find(p => p.id === selectedProjectId)?.name}</span>
+              </div>
+            )}
+            <span>💡 Be specific for better results</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Enter</kbd>
+            <span>to send</span>
+            <span>•</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Shift+Enter</kbd>
+            <span>for new line</span>
+          </div>
+        </div>
+
+        {/* API Status Indicator */}
+        {connectionStatus === 'connected' && (
+          <div className="mt-2 flex items-center justify-center">
+            <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+              <span>AI Ready</span>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -1,288 +1,783 @@
-// components/settings/SettingsPanel.tsx
+// frontend/components/settings/SettingsPanel.tsx
 'use client'
 
-import React from 'react'
-import { motion } from 'framer-motion'
-import { 
-  Cog6ToothIcon,
-  SunIcon,
-  MoonIcon,
-  ComputerDesktopIcon,
-  UserIcon,
+import React, { useState, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  SettingsIcon,
+  ServerIcon,
+  DatabaseIcon,
+  BrainIcon,
+  KeyIcon,
+  PaletteIcon,
   BellIcon,
-  ShieldCheckIcon,
-  TrashIcon
-} from '@heroicons/react/24/outline'
-import { Button } from "@/components/ui/Button"
+  ShieldIcon,
+  DownloadIcon,
+  TrashIcon,
+  RefreshCwIcon,
+  CheckCircleIcon,
+  AlertCircleIcon,
+  InfoIcon,
+  SaveIcon,
+  ResetIcon,
+  ExternalLinkIcon,
+  ClipboardIcon,
+  EyeIcon,
+  EyeOffIcon
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/Badge"
+import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import { useTheme } from 'next-themes'
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs"
+import { cn } from '@/lib/utils'
+import { HealthAPI, SystemInfo, withErrorHandling, copyToClipboard, downloadFile } from '@/lib/api'
 import { useStore } from '@/stores/useStore'
 import toast from 'react-hot-toast'
 
-export function SettingsPanel() {
-  const { theme, setTheme } = useTheme()
-  const { projects, documents, chats, clearNotifications } = useStore()
+interface Settings {
+  // API Settings
+  googleApiKey: string
+  openaiApiKey: string
+  
+  // RAG Settings
+  chunkSize: number
+  chunkOverlap: number
+  topK: number
+  minSimilarity: number
+  
+  // UI Settings
+  theme: 'light' | 'dark' | 'system'
+  sidebarCollapsed: boolean
+  enableAnimations: boolean
+  enableNotifications: boolean
+  
+  // Advanced Settings
+  maxFileSize: number
+  allowedFileTypes: string[]
+  autoSave: boolean
+  debugMode: boolean
+}
 
-  const handleClearAllData = () => {
-    if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-      // TODO: Implement clear all data
-      toast.success('All data cleared')
+const defaultSettings: Settings = {
+  googleApiKey: '',
+  openaiApiKey: '',
+  chunkSize: 500,
+  chunkOverlap: 50,
+  topK: 5,
+  minSimilarity: 0.1,
+  theme: 'light',
+  sidebarCollapsed: false,
+  enableAnimations: true,
+  enableNotifications: true,
+  maxFileSize: 100,
+  allowedFileTypes: ['.pdf', '.docx', '.txt', '.md'],
+  autoSave: true,
+  debugMode: false
+}
+
+export const SettingsPanel: React.FC = () => {
+  // State Management
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
+  const [settings, setSettings] = useState<Settings>(defaultSettings)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState('general')
+  const [showApiKeys, setShowApiKeys] = useState(false)
+  const [showResetDialog, setShowResetDialog] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  
+  // Store integration
+  const store = useStore()
+
+  // Load system info and settings
+  useEffect(() => {
+    loadSystemInfo()
+    loadSettings()
+  }, [])
+
+  const loadSystemInfo = async () => {
+    const result = await withErrorHandling(async () => {
+      return await HealthAPI.getSystemInfo()
+    })
+    
+    if (result) {
+      setSystemInfo(result)
+    }
+    setLoading(false)
+  }
+
+  const loadSettings = () => {
+    try {
+      const saved = localStorage.getItem('ragflow-settings')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        setSettings({ ...defaultSettings, ...parsed })
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error)
     }
   }
 
-  const handleExportData = () => {
-    const data = {
-      projects,
-      documents: documents.map(doc => ({
-        ...doc,
-        // Remove sensitive paths
-        file_path: undefined
-      })),
-      chats,
-      exportDate: new Date().toISOString()
+  const saveSettings = useCallback(async () => {
+    setSaving(true)
+    try {
+      // Save to localStorage
+      localStorage.setItem('ragflow-settings', JSON.stringify(settings))
+      
+      // Update store
+      store.setTheme(settings.theme)
+      store.setSidebarCollapsed(settings.sidebarCollapsed)
+      
+      toast.success('Settings saved successfully')
+    } catch (error) {
+      console.error('Failed to save settings:', error)
+      toast.error('Failed to save settings')
     }
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `ragflow-export-${new Date().toISOString().split('T')[0]}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    
-    toast.success('Data exported successfully')
+    setSaving(false)
+  }, [settings, store])
+
+  const resetSettings = () => {
+    setSettings(defaultSettings)
+    localStorage.removeItem('ragflow-settings')
+    store.reset()
+    toast.success('Settings reset to defaults')
+    setShowResetDialog(false)
   }
 
-  const themeOptions = [
-    { key: 'light', icon: SunIcon, label: 'Light' },
-    { key: 'dark', icon: MoonIcon, label: 'Dark' },
-    { key: 'system', icon: ComputerDesktopIcon, label: 'System' }
-  ]
+  const exportSettings = () => {
+    const exportData = {
+      settings,
+      systemInfo,
+      timestamp: new Date().toISOString(),
+      version: systemInfo?.app.version || 'unknown'
+    }
+    
+    const content = JSON.stringify(exportData, null, 2)
+    downloadFile(content, `ragflow-settings-${new Date().toISOString().split('T')[0]}.json`, 'application/json')
+    toast.success('Settings exported successfully')
+  }
+
+  const copySystemInfo = async () => {
+    if (!systemInfo) return
+    
+    const info = `RagFlow System Information
+Version: ${systemInfo.app.version}
+Python: ${systemInfo.app.python_version.split(' ')[0]}
+Features: ${Object.entries(systemInfo.features).map(([k, v]) => `${k}: ${v ? '✓' : '✗'}`).join(', ')}
+Stats: ${systemInfo.stats.projects} projects, ${systemInfo.stats.documents} documents`
+
+    const success = await copyToClipboard(info)
+    if (success) {
+      toast.success('System info copied to clipboard')
+    } else {
+      toast.error('Failed to copy system info')
+    }
+  }
+
+  // System Information Component
+  const SystemInfoSection: React.FC = () => {
+    if (!systemInfo) return null
+
+    const featureList = Object.entries(systemInfo.features).map(([key, value]) => ({
+      name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      enabled: value,
+      key
+    }))
+
+    return (
+      <div className="space-y-6">
+        {/* System Overview */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ServerIcon className="w-5 h-5" />
+              System Overview
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <Label className="text-gray-600">Application Version</Label>
+                <div className="font-medium">{systemInfo.app.version}</div>
+              </div>
+              <div>
+                <Label className="text-gray-600">Python Version</Label>
+                <div className="font-medium">{systemInfo.app.python_version.split(' ')[0]}</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={copySystemInfo}>
+                <ClipboardIcon className="w-4 h-4 mr-2" />
+                Copy Info
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)}>
+                <DownloadIcon className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Features Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BrainIcon className="w-5 h-5" />
+              Available Features
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              {featureList.map((feature) => (
+                <div key={feature.key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-medium">{feature.name}</span>
+                  <Badge variant={feature.enabled ? "default" : "secondary"}>
+                    {feature.enabled ? (
+                      <CheckCircleIcon className="w-3 h-3 mr-1" />
+                    ) : (
+                      <AlertCircleIcon className="w-3 h-3 mr-1" />
+                    )}
+                    {feature.enabled ? 'Available' : 'Unavailable'}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Usage Statistics */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DatabaseIcon className="w-5 h-5" />
+              Usage Statistics
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {Object.entries(systemInfo.stats).map(([key, value]) => (
+                <div key={key} className="text-center p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">
+                  <div className="text-2xl font-bold text-gray-900">{value}</div>
+                  <div className="text-sm text-gray-600 capitalize">
+                    {key.replace(/_/g, ' ')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Configuration */}
+        {systemInfo.settings && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <SettingsIcon className="w-5 h-5" />
+                Backend Configuration
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                {Object.entries(systemInfo.settings).map(([key, value]) => (
+                  <div key={key}>
+                    <Label className="text-gray-600 capitalize">
+                      {key.replace(/_/g, ' ')}
+                    </Label>
+                    <div className="font-medium">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
+  // API Settings Component
+  const APISettingsSection: React.FC = () => (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyIcon className="w-5 h-5" />
+            API Keys
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <Label>Show API Keys</Label>
+            <Switch
+              checked={showApiKeys}
+              onCheckedChange={setShowApiKeys}
+            />
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="google-api-key">Google AI API Key</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  id="google-api-key"
+                  type={showApiKeys ? "text" : "password"}
+                  value={settings.googleApiKey}
+                  onChange={(e) => setSettings(prev => ({ ...prev, googleApiKey: e.target.value }))}
+                  placeholder="Enter your Google AI API key..."
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowApiKeys(!showApiKeys)}
+                >
+                  {showApiKeys ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-600 mt-1">
+                Required for AI chat functionality. Get your key from{' '}
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                >
+                  Google AI Studio
+                  <ExternalLinkIcon className="w-3 h-3" />
+                </a>
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="openai-api-key">OpenAI API Key (Optional)</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  id="openai-api-key"
+                  type={showApiKeys ? "text" : "password"}
+                  value={settings.openaiApiKey}
+                  onChange={(e) => setSettings(prev => ({ ...prev, openaiApiKey: e.target.value }))}
+                  placeholder="Enter your OpenAI API key..."
+                />
+              </div>
+              <p className="text-xs text-gray-600 mt-1">
+                Optional: For enhanced AI capabilities and embeddings
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BrainIcon className="w-5 h-5" />
+            RAG Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="chunk-size">Chunk Size</Label>
+              <Input
+                id="chunk-size"
+                type="number"
+                min="100"
+                max="2000"
+                value={settings.chunkSize}
+                onChange={(e) => setSettings(prev => ({ ...prev, chunkSize: parseInt(e.target.value) || 500 }))}
+              />
+              <p className="text-xs text-gray-600 mt-1">Text chunk size for document processing</p>
+            </div>
+
+            <div>
+              <Label htmlFor="chunk-overlap">Chunk Overlap</Label>
+              <Input
+                id="chunk-overlap"
+                type="number"
+                min="0"
+                max="500"
+                value={settings.chunkOverlap}
+                onChange={(e) => setSettings(prev => ({ ...prev, chunkOverlap: parseInt(e.target.value) || 50 }))}
+              />
+              <p className="text-xs text-gray-600 mt-1">Overlap between text chunks</p>
+            </div>
+
+            <div>
+              <Label htmlFor="top-k">Top K Results</Label>
+              <Input
+                id="top-k"
+                type="number"
+                min="1"
+                max="20"
+                value={settings.topK}
+                onChange={(e) => setSettings(prev => ({ ...prev, topK: parseInt(e.target.value) || 5 }))}
+              />
+              <p className="text-xs text-gray-600 mt-1">Number of search results to return</p>
+            </div>
+
+            <div>
+              <Label htmlFor="min-similarity">Minimum Similarity</Label>
+              <Input
+                id="min-similarity"
+                type="number"
+                min="0"
+                max="1"
+                step="0.1"
+                value={settings.minSimilarity}
+                onChange={(e) => setSettings(prev => ({ ...prev, minSimilarity: parseFloat(e.target.value) || 0.1 }))}
+              />
+              <p className="text-xs text-gray-600 mt-1">Minimum similarity threshold for search</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+
+  // UI Settings Component
+  const UISettingsSection: React.FC = () => (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PaletteIcon className="w-5 h-5" />
+            Appearance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="theme">Theme</Label>
+            <Select 
+              value={settings.theme} 
+              onValueChange={(value: 'light' | 'dark' | 'system') => 
+                setSettings(prev => ({ ...prev, theme: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
+                <SelectItem value="system">System</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Sidebar Collapsed by Default</Label>
+              <p className="text-xs text-gray-600">Start with collapsed sidebar</p>
+            </div>
+            <Switch
+              checked={settings.sidebarCollapsed}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, sidebarCollapsed: checked }))}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Enable Animations</Label>
+              <p className="text-xs text-gray-600">Smooth transitions and effects</p>
+            </div>
+            <Switch
+              checked={settings.enableAnimations}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableAnimations: checked }))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BellIcon className="w-5 h-5" />
+            Notifications
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Enable Notifications</Label>
+              <p className="text-xs text-gray-600">Show toast notifications for actions</p>
+            </div>
+            <Switch
+              checked={settings.enableNotifications}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableNotifications: checked }))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+
+  // Advanced Settings Component
+  const AdvancedSettingsSection: React.FC = () => (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldIcon className="w-5 h-5" />
+            File Upload Settings
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="max-file-size">Maximum File Size (MB)</Label>
+            <Input
+              id="max-file-size"
+              type="number"
+              min="1"
+              max="1000"
+              value={settings.maxFileSize}
+              onChange={(e) => setSettings(prev => ({ ...prev, maxFileSize: parseInt(e.target.value) || 100 }))}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="allowed-types">Allowed File Types</Label>
+            <Textarea
+              id="allowed-types"
+              value={settings.allowedFileTypes.join(', ')}
+              onChange={(e) => setSettings(prev => ({ 
+                ...prev, 
+                allowedFileTypes: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
+              }))}
+              placeholder=".pdf, .docx, .txt, .md"
+              rows={2}
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              Comma-separated list of allowed file extensions
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <SettingsIcon className="w-5 h-5" />
+            Advanced Options
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Auto-save Settings</Label>
+              <p className="text-xs text-gray-600">Automatically save changes</p>
+            </div>
+            <Switch
+              checked={settings.autoSave}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, autoSave: checked }))}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Debug Mode</Label>
+              <p className="text-xs text-gray-600">Show additional debugging information</p>
+            </div>
+            <Switch
+              checked={settings.debugMode}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, debugMode: checked }))}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-amber-600">
+              <AlertCircleIcon className="w-4 h-4" />
+              <Label>Danger Zone</Label>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowResetDialog(true)}
+                className="border-red-200 text-red-600 hover:bg-red-50"
+              >
+                <ResetIcon className="w-4 h-4 mr-2" />
+                Reset Settings
+              </Button>
+              
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  localStorage.clear()
+                  window.location.reload()
+                }}
+                className="border-red-200 text-red-600 hover:bg-red-50"
+              >
+                <TrashIcon className="w-4 h-4 mr-2" />
+                Clear All Data
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"
+          />
+          <p className="text-gray-600">Loading settings...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="flex-shrink-0 p-6 border-b">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 text-white">
-            <Cog6ToothIcon className="h-5 w-5" />
+      <div className="bg-white border-b border-gray-200 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-800 rounded-lg flex items-center justify-center">
+              <SettingsIcon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+              <p className="text-sm text-gray-600">Configure your RagFlow experience</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Settings</h1>
-            <p className="text-muted-foreground">Manage your RagFlow preferences</p>
+
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={loadSystemInfo}>
+              <RefreshCwIcon className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+            <Button onClick={saveSettings} disabled={saving}>
+              {saving ? (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                />
+              ) : (
+                <SaveIcon className="w-4 h-4 mr-2" />
+              )}
+              Save Settings
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        
-        {/* Appearance */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <SunIcon className="h-5 w-5" />
-                Appearance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-3 block">Theme</label>
-                <div className="flex gap-3">
-                  {themeOptions.map((option) => {
-                    const Icon = option.icon
-                    return (
-                      <Button
-                        key={option.key}
-                        variant={theme === option.key ? "default" : "outline"}
-                        onClick={() => setTheme(option.key)}
-                        className="flex-1"
-                      >
-                        <Icon className="h-4 w-4 mr-2" />
-                        {option.label}
-                      </Button>
-                    )
-                  })}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+          <div className="border-b border-gray-200 bg-white px-6">
+            <TabsList className="grid w-full grid-cols-4 max-w-md">
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="api">API & RAG</TabsTrigger>
+              <TabsTrigger value="ui">Interface</TabsTrigger>
+              <TabsTrigger value="advanced">Advanced</TabsTrigger>
+            </TabsList>
+          </div>
 
-        {/* Profile */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UserIcon className="h-5 w-5" />
-                Profile
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Display Name</label>
-                  <Input placeholder="Your name" defaultValue="User" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Email</label>
-                  <Input type="email" placeholder="your@email.com" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Notifications */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BellIcon className="h-5 w-5" />
-                Notifications
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">Processing Complete</div>
-                  <div className="text-sm text-muted-foreground">
-                    Get notified when document processing finishes
-                  </div>
-                </div>
-                <Button variant="outline" size="sm">Enable</Button>
-              </div>
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-4xl mx-auto">
+              <TabsContent value="general" className="mt-0">
+                <SystemInfoSection />
+              </TabsContent>
               
-              <Separator />
+              <TabsContent value="api" className="mt-0">
+                <APISettingsSection />
+              </TabsContent>
               
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">Error Alerts</div>
-                  <div className="text-sm text-muted-foreground">
-                    Receive alerts for processing errors
-                  </div>
-                </div>
-                <Button variant="outline" size="sm">Enable</Button>
-              </div>
-
-              <div className="pt-2">
-                <Button variant="ghost" size="sm" onClick={clearNotifications}>
-                  Clear All Notifications
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Data & Storage */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheckIcon className="h-5 w-5" />
-                Data & Storage
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Statistics */}
-              <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
-                <div className="text-center">
-                  <div className="text-2xl font-bold">{projects.length}</div>
-                  <div className="text-sm text-muted-foreground">Projects</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">{documents.length}</div>
-                  <div className="text-sm text-muted-foreground">Documents</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">{chats.length}</div>
-                  <div className="text-sm text-muted-foreground">Chats</div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="space-y-3">
-                <Button variant="outline" onClick={handleExportData} className="w-full">
-                  Export All Data
-                </Button>
-                
-                <Button 
-                  variant="destructive" 
-                  onClick={handleClearAllData}
-                  className="w-full"
-                >
-                  <TrashIcon className="h-4 w-4 mr-2" />
-                  Clear All Data
-                </Button>
-              </div>
+              <TabsContent value="ui" className="mt-0">
+                <UISettingsSection />
+              </TabsContent>
               
-              <div className="text-xs text-muted-foreground">
-                <p>• Export includes projects, documents metadata, and chat history</p>
-                <p>• Actual document files are not included in exports</p>
-                <p>• Clearing data will remove all projects, chats, and document references</p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* About */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>About RagFlow</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span>Version</span>
-                <Badge variant="secondary">2.0.0</Badge>
-              </div>
-              <div className="flex justify-between">
-                <span>Backend Status</span>
-                <Badge variant="default">Connected</Badge>
-              </div>
-              <div className="flex justify-between">
-                <span>AI Model</span>
-                <Badge variant="outline">Gemini 1.5 Flash</Badge>
-              </div>
-              
-              <Separator />
-              
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p>🚀 AI-powered document analysis platform</p>
-                <p>🤖 Powered by Google Gemini</p>
-                <p>💻 Built with Next.js & FastAPI</p>
-                <p>💙 Made with love for productivity</p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+              <TabsContent value="advanced" className="mt-0">
+                <AdvancedSettingsSection />
+              </TabsContent>
+            </div>
+          </div>
+        </Tabs>
       </div>
+
+      {/* Reset Confirmation Dialog */}
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircleIcon className="w-5 h-5 text-red-500" />
+              Reset Settings
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to reset all settings to their default values? 
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={resetSettings}>
+              <ResetIcon className="w-4 h-4 mr-2" />
+              Reset Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DownloadIcon className="w-5 h-5" />
+              Export Settings
+            </DialogTitle>
+            <DialogDescription>
+              Export your current settings and system information for backup or sharing.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={exportSettings}>
+              <DownloadIcon className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
+
+export default SettingsPanel

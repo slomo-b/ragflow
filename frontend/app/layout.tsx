@@ -1,71 +1,11 @@
 // frontend/app/layout.tsx
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { Providers } from '@/components/providers/Providers'
 import { Toaster } from 'react-hot-toast'
-
-const inter = Inter({ 
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-})
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: {
-    default: 'RagFlow - AI-Powered Document Analysis',
-    template: '%s | RagFlow'
-  },
-  description: 'Powerful AI-driven document analysis and chat interface. Upload documents, ask questions, and get intelligent insights powered by Google Gemini.',
-  keywords: [
-    'AI',
-    'document analysis',
-    'machine learning',
-    'chat interface',
-    'Google Gemini',
-    'PDF analysis',
-    'document search',
-    'knowledge management'
-  ],
-  authors: [{ name: 'RagFlow Team' }],
-  creator: 'RagFlow',
-  metadataBase: new URL('http://localhost:3000'),
-  openGraph: {
-    type: 'website',
-    locale: 'en_US',
-    url: 'http://localhost:3000',
-    title: 'RagFlow - AI-Powered Document Analysis',
-    description: 'Powerful AI-driven document analysis and chat interface',
-    siteName: 'RagFlow',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'RagFlow - AI Document Analysis'
-      }
-    ]
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'RagFlow - AI-Powered Document Analysis',
-    description: 'Powerful AI-driven document analysis and chat interface',
-    images: ['/og-image.png']
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
-  },
-  verification: {
-    google: 'your-google-site-verification',
-  }
+  title: 'RagFlow - AI Document Assistant',
+  description: 'AI-powered document analysis and chat system with advanced RAG capabilities.',
 }
 
 export default function RootLayout({
@@ -74,60 +14,85 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html 
-      lang="en" 
-      className={`${inter.variable} antialiased`}
-      suppressHydrationWarning
-    >
-      <body className="min-h-screen bg-gray-50 antialiased">
-        <Providers>
-          {/* Main Application Container - REMOVED conflicting styles */}
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" 
+          rel="stylesheet" 
+        />
+      </head>
+      <body className="font-sans antialiased min-h-screen bg-background text-foreground">
+        {/* Skip to main content for accessibility */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-md"
+        >
+          Skip to main content
+        </a>
+
+        {/* Main Application */}
+        <div id="main-content">
           {children}
-          
-          {/* Toast Notifications */}
-          <Toaster
-            position="top-right"
-            reverseOrder={false}
-            gutter={8}
-            toastOptions={{
-              // Simplified toast options
-              duration: 4000,
+        </div>
+
+        {/* Toast Notifications */}
+        <Toaster
+          position="top-right"
+          reverseOrder={false}
+          gutter={8}
+          containerClassName="z-[9999]"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#ffffff',
+              color: '#374151',
+              border: '1px solid #e5e7eb',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem',
+              maxWidth: '400px',
+              padding: '12px 16px',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            },
+            success: {
+              duration: 3000,
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#ffffff',
+              },
               style: {
-                background: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: '12px',
-                color: '#1f2937',
-                fontSize: '14px',
-                fontWeight: '500',
-                padding: '12px 16px',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                background: '#f0fdf4',
+                color: '#166534',
+                border: '1px solid #bbf7d0',
               },
-              success: {
-                duration: 3000,
-                style: {
-                  background: '#f0fdf4',
-                  border: '1px solid #bbf7d0',
-                  color: '#15803d',
-                },
+            },
+            error: {
+              duration: 5000,
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#ffffff',
               },
-              error: {
-                duration: 5000,
-                style: {
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#dc2626',
-                },
+              style: {
+                background: '#fef2f2',
+                color: '#dc2626',
+                border: '1px solid #fecaca',
               },
-              loading: {
-                style: {
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  color: '#2563eb',
-                },
+            },
+            loading: {
+              duration: Infinity,
+              iconTheme: {
+                primary: '#3b82f6',
+                secondary: '#ffffff',
               },
-            }}
-          />
-        </Providers>
+              style: {
+                background: '#eff6ff',
+                color: '#1d4ed8',
+                border: '1px solid #dbeafe',
+              },
+            },
+          }}
+        />
       </body>
     </html>
   )

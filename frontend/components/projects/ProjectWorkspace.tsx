@@ -1,479 +1,568 @@
+// frontend/components/projects/ProjectWorkspace.tsx
 'use client'
 
-import React, { useState } from 'react'
-import { FolderOpen, Plus, Calendar, FileText, MessageCircle, MoreVertical, Trash2, Edit3, Settings } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
-import { useStore } from '@/stores/useStore'
+import React, { useState, useCallback, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  PlusIcon,
+  FolderIcon,
+  DocumentTextIcon,
+  ChatBubbleLeftRightIcon,
+  EllipsisVerticalIcon,
+  PencilIcon,
+  TrashIcon,
+  CalendarIcon,
+  SparklesIcon,
+  ArrowRightIcon,
+  ExclamationTriangleIcon
+} from '@heroicons/react/24/outline'
+import {
+  FolderIcon as FolderSolidIcon,
+  CheckCircleIcon as CheckCircleSolidIcon
+} from '@heroicons/react/24/solid'
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/Badge"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { cn } from '@/lib/utils'
+import { ProjectAPI, DocumentAPI, handleAPIError, withErrorHandling, Project, SystemInfo, HealthAPI } from '@/lib/api'
+import toast from 'react-hot-toast'
 
-// Create Project Modal Component
-const CreateProjectModal = ({ isOpen, onClose, onSubmit }: {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit: (data: { name: string; description: string }) => void
-}) => {
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-    
-    onSubmit({ name: name.trim(), description: description.trim() })
-    setName('')
-    setDescription('')
-    onClose()
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Create New Project</h2>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Project Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter project name..."
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description (Optional)
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description of your project..."
-                rows={3}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-              />
-            </div>
-            
-            <div className="flex items-center justify-end space-x-3 pt-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={onClose}
-                className="px-4 py-2"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!name.trim()}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700"
-              >
-                Create Project
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  )
+interface ProjectWithStats extends Project {
+  document_count: number
+  chat_count?: number
+  last_activity?: string
 }
 
-// Edit Project Modal Component
-const EditProjectModal = ({ isOpen, onClose, onSubmit, project }: {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit: (data: { name: string; description: string }) => void
-  project: any
-}) => {
-  const [name, setName] = useState(project?.name || '')
-  const [description, setDescription] = useState(project?.description || '')
+interface ProjectFormData {
+  name: string
+  description: string
+}
 
-  React.useEffect(() => {
-    if (project) {
-      setName(project.name || '')
-      setDescription(project.description || '')
+export const ProjectWorkspace: React.FC = () => {
+  // State Management
+  const [projects, setProjects] = useState<ProjectWithStats[]>([])
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [selectedProject, setSelectedProject] = useState<ProjectWithStats | null>(null)
+  const [formData, setFormData] = useState<ProjectFormData>({ name: '', description: '' })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Load data on mount
+  useEffect(() => {
+    loadProjects()
+    loadSystemInfo()
+  }, [])
+
+  const loadProjects = async () => {
+    setIsLoading(true)
+    const result = await withErrorHandling(async () => {
+      return await ProjectAPI.getProjects()
+    })
+    
+    if (result) {
+      setProjects(result)
     }
-  }, [project])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-    
-    onSubmit({ name: name.trim(), description: description.trim() })
-    onClose()
+    setIsLoading(false)
   }
 
-  if (!isOpen || !project) return null
+  const loadSystemInfo = async () => {
+    const result = await withErrorHandling(async () => {
+      return await HealthAPI.getSystemInfo()
+    }, false) // Don't show error toast for system info
+    
+    if (result) {
+      setSystemInfo(result)
+    }
+  }
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Edit Project</h2>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Project Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter project name..."
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description (Optional)
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description of your project..."
-                rows={3}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-              />
-            </div>
-            
-            <div className="flex items-center justify-end space-x-3 pt-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={onClose}
-                className="px-4 py-2"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!name.trim()}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700"
-              >
-                Update Project
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  )
-}
+  // Project creation
+  const createProject = useCallback(async () => {
+    if (!formData.name.trim()) {
+      toast.error('Project name is required')
+      return
+    }
 
-// Project Card Component
-const ProjectCard = ({ project, isActive, onClick }: {
-  project: any
-  isActive: boolean
-  onClick: () => void
-}) => {
-  const [showMenu, setShowMenu] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const { deleteProject, updateProject } = useStore()
+    setIsSubmitting(true)
+    const result = await withErrorHandling(async () => {
+      return await ProjectAPI.createProject({
+        name: formData.name.trim(),
+        description: formData.description.trim()
+      })
+    })
 
-  // Safe date formatting
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString)
-      if (isNaN(date.getTime())) {
-        return 'Recently created'
+    if (result) {
+      setProjects(prev => [result, ...prev])
+      setShowCreateDialog(false)
+      setFormData({ name: '', description: '' })
+      toast.success('Project created successfully')
+    }
+    setIsSubmitting(false)
+  }, [formData])
+
+  // Project deletion
+  const deleteProject = useCallback(async () => {
+    if (!selectedProject) return
+
+    setIsSubmitting(true)
+    const result = await withErrorHandling(async () => {
+      await ProjectAPI.deleteProject(selectedProject.id)
+    })
+
+    if (result !== null) {
+      setProjects(prev => prev.filter(p => p.id !== selectedProject.id))
+      setShowDeleteDialog(false)
+      setSelectedProject(null)
+      toast.success('Project deleted successfully')
+    }
+    setIsSubmitting(false)
+  }, [selectedProject])
+
+  // Dialog handlers
+  const handleCreateClick = () => {
+    setFormData({ name: '', description: '' })
+    setShowCreateDialog(true)
+  }
+
+  const handleEditClick = (project: ProjectWithStats) => {
+    setSelectedProject(project)
+    setFormData({ name: project.name, description: project.description })
+    setShowEditDialog(true)
+  }
+
+  const handleDeleteClick = (project: ProjectWithStats) => {
+    setSelectedProject(project)
+    setShowDeleteDialog(true)
+  }
+
+  // System Stats Component
+  const SystemStats: React.FC = () => {
+    if (!systemInfo) return null
+
+    const stats = [
+      {
+        label: 'Total Projects',
+        value: systemInfo.stats.projects,
+        icon: FolderSolidIcon,
+        color: 'text-blue-600 bg-blue-100'
+      },
+      {
+        label: 'Documents',
+        value: systemInfo.stats.documents,
+        icon: DocumentTextIcon,
+        color: 'text-green-600 bg-green-100'
+      },
+      {
+        label: 'RAG Documents',
+        value: systemInfo.stats.rag_documents,
+        icon: SparklesIcon,
+        color: 'text-purple-600 bg-purple-100'
+      },
+      {
+        label: 'Total Chats',
+        value: systemInfo.stats.chats,
+        icon: ChatBubbleLeftRightIcon,
+        color: 'text-orange-600 bg-orange-100'
       }
-      return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric'
-      }).format(date)
-    } catch {
-      return 'Recently created'
-    }
-  }
+    ]
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (confirm(`Are you sure you want to delete "${project.name}"?\n\nThis will also delete all associated documents and chats.`)) {
-      deleteProject(project.id)
-    }
-    setShowMenu(false)
-  }
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setShowEditModal(true)
-    setShowMenu(false)
-  }
-
-  const handleEditSubmit = (data: { name: string; description: string }) => {
-    updateProject(project.id, data)
-  }
-
-  return (
-    <>
-      <div
-        onClick={onClick}
-        className={cn(
-          "group relative p-6 bg-white border rounded-2xl transition-all duration-200 cursor-pointer",
-          isActive
-            ? "border-blue-500 shadow-lg shadow-blue-500/10 bg-blue-50"
-            : "border-gray-200 hover:border-gray-300 hover:shadow-md"
-        )}
-      >
-        {/* Project Icon & Status */}
-        <div className="flex items-start justify-between mb-4">
-          <div className={cn(
-            "w-12 h-12 rounded-xl flex items-center justify-center",
-            isActive ? "bg-blue-600" : "bg-gray-100 group-hover:bg-gray-200"
-          )}>
-            <FolderOpen 
-              size={24} 
-              className={cn(
-                "transition-colors",
-                isActive ? "text-white" : "text-gray-600"
-              )} 
-            />
-          </div>
-          
-          {/* Menu Button */}
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowMenu(!showMenu)
-              }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-2 h-8 w-8"
-            >
-              <MoreVertical size={16} />
-            </Button>
-            
-            {/* Dropdown Menu */}
-            {showMenu && (
-              <>
-                {/* Backdrop to close menu */}
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setShowMenu(false)}
-                />
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20">
-                  <div className="py-2">
-                    <button
-                      onClick={handleEdit}
-                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                    >
-                      <Edit3 size={16} />
-                      <span>Edit Project</span>
-                    </button>
-                    <div className="border-t border-gray-100 my-1"></div>
-                    <button
-                      onClick={handleDelete}
-                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
-                    >
-                      <Trash2 size={16} />
-                      <span>Delete Project</span>
-                    </button>
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {stats.map((stat, index) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+          >
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">{stat.label}</p>
+                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  </div>
+                  <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', stat.color)}>
+                    <stat.icon className="w-5 h-5" />
                   </div>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Project Info */}
-        <div className="mb-4">
-          <h3 className={cn(
-            "text-lg font-semibold mb-2 line-clamp-2",
-            isActive ? "text-blue-900" : "text-gray-900"
-          )}>
-            {project.name}
-          </h3>
-          
-          {project.description && (
-            <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-              {project.description}
-            </p>
-          )}
-        </div>
-
-        {/* Project Stats */}
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-1 text-gray-500">
-              <FileText size={16} />
-              <span>{project.document_count || 0} docs</span>
-            </div>
-            <div className="flex items-center space-x-1 text-gray-500">
-              <MessageCircle size={16} />
-              <span>{project.chat_count || 0} chats</span>
-            </div>
-          </div>
-          
-          <div className="text-xs text-gray-400">
-            {formatDate(project.createdAt)}
-          </div>
-        </div>
-
-        {/* Active Project Badge */}
-        {isActive && (
-          <div className="absolute top-4 right-12">
-            <Badge className="bg-green-100 text-green-700 text-xs">
-              Active
-            </Badge>
-          </div>
-        )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
       </div>
-
-      {/* Edit Modal */}
-      <EditProjectModal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        onSubmit={handleEditSubmit}
-        project={project}
-      />
-    </>
-  )
-}
-
-// Empty State Component
-const EmptyProjectsState = ({ onCreateProject }: { onCreateProject: () => void }) => (
-  <div className="flex flex-col items-center justify-center py-20 text-center">
-    <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center mb-6">
-      <FolderOpen className="h-10 w-10 text-gray-400" />
-    </div>
-    
-    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-      No projects yet
-    </h3>
-    <p className="text-gray-600 mb-8 max-w-md">
-      Create your first project to organize your documents and start analyzing them with AI.
-    </p>
-    
-    <Button 
-      onClick={onCreateProject}
-      className="bg-blue-600 hover:bg-blue-700"
-    >
-      <Plus size={16} className="mr-2" />
-      Create Your First Project
-    </Button>
-  </div>
-)
-
-// Main Project Workspace Component
-export function ProjectWorkspace() {
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  
-  const { projects, currentProject, setCurrentProject, addProject } = useStore()
-
-  // Filter projects based on search
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
-
-  const handleCreateProject = (data: { name: string; description: string }) => {
-    addProject(data)
+    )
   }
 
-  const handleProjectSelect = (project: any) => {
-    setCurrentProject(project)
+  // Project Card Component
+  const ProjectCard: React.FC<{ project: ProjectWithStats; index: number }> = ({ project, index }) => {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.1 }}
+        className="group"
+      >
+        <Card className="hover:shadow-lg transition-all duration-200 border border-gray-200 hover:border-gray-300">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <FolderSolidIcon className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-lg font-semibold text-gray-900 truncate">
+                    {project.name}
+                  </CardTitle>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Created {new Date(project.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <EllipsisVerticalIcon className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleEditClick(project)}>
+                    <PencilIcon className="w-4 h-4 mr-2" />
+                    Edit Project
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="text-red-600"
+                    onClick={() => handleDeleteClick(project)}
+                  >
+                    <TrashIcon className="w-4 h-4 mr-2" />
+                    Delete Project
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0">
+            {/* Description */}
+            {project.description && (
+              <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                {project.description}
+              </p>
+            )}
+
+            {/* Stats */}
+            <div className="flex items-center gap-4 mb-4 text-sm text-gray-600">
+              <div className="flex items-center gap-1">
+                <DocumentTextIcon className="w-4 h-4" />
+                <span>{project.document_count} documents</span>
+              </div>
+              {project.chat_count !== undefined && (
+                <div className="flex items-center gap-1">
+                  <ChatBubbleLeftRightIcon className="w-4 h-4" />
+                  <span>{project.chat_count} chats</span>
+                </div>
+              )}
+            </div>
+
+            {/* Status Badge */}
+            <div className="flex items-center justify-between">
+              <Badge 
+                variant={project.document_count > 0 ? "default" : "secondary"}
+                className="text-xs"
+              >
+                {project.document_count > 0 ? (
+                  <>
+                    <CheckCircleSolidIcon className="w-3 h-3 mr-1" />
+                    Active
+                  </>
+                ) : (
+                  <>
+                    <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                    Empty
+                  </>
+                )}
+              </Badge>
+
+              {/* Quick Actions */}
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="text-xs">
+                  <ArrowRightIcon className="w-3 h-3 mr-1" />
+                  Open
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <FolderOpen className="h-5 w-5 text-white" />
+      <div className="bg-white border-b border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
+              <FolderIcon className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Projects</h1>
+              <h1 className="text-xl font-semibold text-gray-900">Projects</h1>
               <p className="text-sm text-gray-600">
-                Organize your document analysis projects
+                Manage your document collections and AI workspaces
               </p>
             </div>
           </div>
-          
+
           <Button 
-            onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 hover:bg-blue-700"
+            onClick={handleCreateClick}
+            className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700"
           >
-            <Plus size={16} className="mr-2" />
+            <PlusIcon className="w-4 h-4 mr-2" />
             New Project
           </Button>
         </div>
+
+        {/* System Stats */}
+        <SystemStats />
       </div>
 
-      {/* Search & Filters */}
-      {projects.length > 0 && (
-        <div className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-100">
-          <div className="flex items-center space-x-4">
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search projects..."
-                className="w-full px-4 py-2 pl-4 pr-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"
               />
-            </div>
-            
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <span>{filteredProjects.length} of {projects.length} projects</span>
+              <p className="text-gray-600">Loading projects...</p>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto">
-        {projects.length === 0 ? (
-          <EmptyProjectsState onCreateProject={() => setShowCreateModal(true)} />
-        ) : (
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredProjects.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  isActive={currentProject?.id === project.id}
-                  onClick={() => handleProjectSelect(project)}
-                />
-              ))}
+        ) : projects.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12"
+          >
+            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <FolderIcon className="w-8 h-8 text-white" />
             </div>
-            
-            {filteredProjects.length === 0 && searchQuery && (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No projects found matching "{searchQuery}"</p>
-                <Button
-                  variant="ghost"
-                  onClick={() => setSearchQuery('')}
-                  className="mt-2"
-                >
-                  Clear search
-                </Button>
-              </div>
-            )}
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
+            <p className="text-gray-600 max-w-md mx-auto mb-6">
+              Create your first project to start organizing documents and building your AI-powered knowledge base.
+            </p>
+            <Button 
+              onClick={handleCreateClick}
+              className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Create First Project
+            </Button>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <AnimatePresence>
+              {projects.map((project, index) => (
+                <ProjectCard key={project.id} project={project} index={index} />
+              ))}
+            </AnimatePresence>
           </div>
         )}
       </div>
 
-      {/* Create Project Modal */}
-      <CreateProjectModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreateProject}
-      />
+      {/* Create Project Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>
+              Create a new project to organize your documents and AI conversations.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="name">Project Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter project name..."
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="description">Description (Optional)</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Describe your project..."
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCreateDialog(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={createProject}
+              disabled={!formData.name.trim() || isSubmitting}
+              className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700"
+            >
+              {isSubmitting ? (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                />
+              ) : (
+                <PlusIcon className="w-4 h-4 mr-2" />
+              )}
+              Create Project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Project Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+            <DialogDescription>
+              Update your project information.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-name">Project Name</Label>
+              <Input
+                id="edit-name"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter project name..."
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="edit-description">Description</Label>
+              <Textarea
+                id="edit-description"
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Describe your project..."
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowEditDialog(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                // TODO: Implement project update
+                toast.info('Project update functionality coming soon')
+                setShowEditDialog(false)
+              }}
+              disabled={!formData.name.trim() || isSubmitting}
+            >
+              <PencilIcon className="w-4 h-4 mr-2" />
+              Update Project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+              Delete Project
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{selectedProject?.name}"? This action cannot be undone 
+              and will remove all associated documents and conversations.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={deleteProject}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                />
+              ) : (
+                <TrashIcon className="w-4 h-4 mr-2" />
+              )}
+              Delete Project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
+
+export default ProjectWorkspace

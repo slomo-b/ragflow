@@ -641,5 +641,243 @@
       "context_length": 0,
       "sources_count": 0
     }
+  },
+  "003f2d70-448c-4ac2-b236-4de8cb7523f3": {
+    "project_id": "e1500255-4766-45c5-9c98-e119d95c9a5b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": "2025-07-20T18:17:05.110717"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-pro\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-pro\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-pro\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, retry_delay {\n  seconds: 56\n}\n]",
+        "timestamp": "2025-07-20T18:17:05.110717"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:17:05.110717"
+  },
+  "8a402a19-aad3-452e-9d64-533e53cf153d": {
+    "project_id": "e1500255-4766-45c5-9c98-e119d95c9a5b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": "2025-07-20T18:28:29.504047"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:28:29.504047"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:28:29.504047"
+  },
+  "b0801670-f9e2-4014-b55e-b6e55fb448e9": {
+    "project_id": "e1500255-4766-45c5-9c98-e119d95c9a5b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hallo",
+        "timestamp": "2025-07-20T18:30:28.890556"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:30:28.890556"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:30:28.890556"
+  },
+  "6f7dd140-7526-4756-bd58-a6f121414a8a": {
+    "project_id": "b430a1e8-acc4-4a02-8bfd-0a4e0e4f0fb6",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": "2025-07-20T18:30:40.876135"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-pro\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-pro\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-pro\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, retry_delay {\n  seconds: 20\n}\n]",
+        "timestamp": "2025-07-20T18:30:40.876135"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:30:40.876135"
+  },
+  "12783c65-31c6-467d-9087-0d9866b3ab70": {
+    "project_id": "b430a1e8-acc4-4a02-8bfd-0a4e0e4f0fb6",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": "2025-07-20T18:31:12.958700"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:31:12.958700"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:31:12.958700"
+  },
+  "92a5e811-681e-419c-aab0-e077e7c18626": {
+    "project_id": "b430a1e8-acc4-4a02-8bfd-0a4e0e4f0fb6",
+    "messages": [
+      {
+        "role": "user",
+        "content": "ola",
+        "timestamp": "2025-07-20T18:31:23.034230"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:31:23.034230"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:31:23.034230"
+  },
+  "7f6d52c3-9b35-4d4c-ba5a-bac322b38407": {
+    "project_id": null,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, this is a test message",
+        "timestamp": "2025-07-20T18:42:55.262571"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:42:55.262571"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:42:55.262571"
+  },
+  "ccbde01f-d24f-43e8-8bd2-008ebdf31a77": {
+    "project_id": null,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, this is a test message",
+        "timestamp": "2025-07-20T18:42:55.396242"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:42:55.396242"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:42:55.396242"
+  },
+  "ffed01fb-bbd4-44fa-baf6-5f9f2394eb47": {
+    "project_id": "e1500255-4766-45c5-9c98-e119d95c9a5b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": "2025-07-20T18:43:02.656442"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:43:02.656442"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:43:02.656442"
+  },
+  "ff7bcb28-1b82-428a-92d0-396dd75f58c3": {
+    "project_id": null,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, this is a test message",
+        "timestamp": "2025-07-20T18:44:15.609348"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:44:15.609348"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:44:15.609348"
+  },
+  "1bde65ea-006c-4249-b3a5-67d4ae76957a": {
+    "project_id": null,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, this is a test message",
+        "timestamp": "2025-07-20T18:44:15.664812"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:44:15.664812"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:44:15.664812"
+  },
+  "f80b01fd-dc04-4086-af7f-b0cf69ff27e6": {
+    "project_id": "e1500255-4766-45c5-9c98-e119d95c9a5b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi",
+        "timestamp": "2025-07-20T18:44:19.374198"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:44:19.374198"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:44:19.374198"
+  },
+  "d09636a5-622d-47d3-b65d-34cff14b25cb": {
+    "project_id": null,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, this is a test message",
+        "timestamp": "2025-07-20T18:44:56.661456"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:44:56.661456"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:44:56.661456"
+  },
+  "c4ebaa72-7462-4524-a850-7dfcb8e2bc1a": {
+    "project_id": null,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, this is a test message",
+        "timestamp": "2025-07-20T18:44:56.709538"
+      },
+      {
+        "role": "assistant",
+        "content": "Sorry, I encountered an error generating a response: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]",
+        "timestamp": "2025-07-20T18:44:56.709538"
+      }
+    ],
+    "sources": [],
+    "created_at": "2025-07-20T18:44:56.709538"
   }
 }
