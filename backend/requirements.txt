@@ -1,30 +1,48 @@
-# RagFlow Backend Requirements - Python 3.13 Compatible
-# Nur stabile, kompatible Versionen
+# RagFlow Backend Requirements - Latest Versions 2025
+# Optimiert für Python 3.13 mit modernsten Bibliotheken
 
-# Core Web Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+# === CORE WEB FRAMEWORK (Latest) ===
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
 
-# Pydantic (kompatible Version)
-pydantic==1.10.12
+# === PYDANTIC V2 (Latest) ===
+pydantic>=2.10.0
+pydantic-settings>=2.10.0
 
-# Google AI
-google-generativeai==0.3.2
+# === AI & ML (Latest Stable) ===
+google-generativeai>=0.8.0
+openai>=1.54.0  # Falls du auch OpenAI nutzen willst
 
-# Basic numpy (unterstützt Python 3.13)
-numpy>=1.26.0
+# === DATA PROCESSING (Latest) ===
+numpy>=2.0.0
+pandas>=2.2.0
+scikit-learn>=1.6.0
 
-# Document Processing (stabile Versionen)
-PyPDF2==3.0.1
-python-docx==0.8.11
+# === DOCUMENT PROCESSING (Modern) ===
+pypdf>=5.1.0  # Moderner Ersatz für PyPDF2
+python-docx>=1.1.0
+python-multipart>=0.0.12
 
-# Utilities
-python-dotenv==1.0.0
+# === VECTOR EMBEDDINGS (Optional aber empfohlen) ===
+sentence-transformers>=3.3.0
+chromadb>=0.5.0  # Für persistente Vektordatenbank
+faiss-cpu>=1.9.0  # Schnelle Vektorsuche
 
-# OPTIONAL: Nur installieren wenn scikit-learn funktioniert
-# Kommentieren Sie diese Zeile aus wenn Probleme auftreten:
-# scikit-learn>=1.4.0
+# === UTILITIES (Latest) ===
+python-dotenv>=1.0.1
+rich>=13.9.0  # Für schöne Terminal-Ausgaben
+typer>=0.15.0  # Für CLI (falls gewünscht)
 
-# Alternative: Einfache Text-Verarbeitung ohne ML
-# regex==2023.10.3
+# === ASYNC & PERFORMANCE ===
+httpx>=0.28.0  # Für async HTTP requests
+asyncio-mqtt>=0.16.0  # Falls MQTT gebraucht wird
+
+# === MONITORING & LOGGING (Optional) ===
+loguru>=0.7.0  # Besseres Logging
+prometheus-client>=0.21.0  # Metriken
+
+# === DEVELOPMENT (Optional) ===
+# pytest>=8.3.0
+# black>=24.0.0
+# ruff>=0.8.0  # Schneller Linter/Formatter

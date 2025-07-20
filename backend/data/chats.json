@@ -551,5 +551,95 @@
       "context_length": 1357,
       "sources_count": 3
     }
+  },
+  "cd7896f4-4a48-4998-b57b-af56b08d569d": {
+    "id": "cd7896f4-4a48-4998-b57b-af56b08d569d",
+    "project_id": "sqmuliqub",
+    "user_message": "hi",
+    "ai_response": "Hi there! How can I help you today?  I need more information than just \"hi\" to be able to assist you.  Do you have any documents you'd like me to analyze, or a specific question you'd like answered?\n",
+    "timestamp": "2025-07-15T23:12:17.333113",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "b5e94be2-14dd-4f35-8580-0a9eeb2c26f5": {
+    "id": "b5e94be2-14dd-4f35-8580-0a9eeb2c26f5",
+    "project_id": "sqmuliqub",
+    "user_message": "summarize my file",
+    "ai_response": "Please provide me with the file you want me to summarize.  I need the content of the file to be able to summarize it for you.\n",
+    "timestamp": "2025-07-15T23:12:27.473775",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "2633f1db-24cc-4616-ae3d-4c9d74ad5fa9": {
+    "id": "2633f1db-24cc-4616-ae3d-4c9d74ad5fa9",
+    "project_id": "sqmuliqub",
+    "user_message": "Summarize my documents",
+    "ai_response": "Please provide me with the documents you would like me to summarize.  I need the text of the documents to be able to help you.\n",
+    "timestamp": "2025-07-15T23:13:34.647326",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "70bd03b1-2a3f-4c7f-8097-8dc78331a8ea": {
+    "id": "70bd03b1-2a3f-4c7f-8097-8dc78331a8ea",
+    "project_id": "sqmuliqub",
+    "user_message": "Summarize my documents",
+    "ai_response": "Please provide me with the documents you would like me to summarize. I need the text of the documents to be able to complete your request.\n",
+    "timestamp": "2025-07-15T23:24:06.867170",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "52be0824-ebe6-4704-bbdc-55adff6b13a5": {
+    "id": "52be0824-ebe6-4704-bbdc-55adff6b13a5",
+    "project_id": "sqmuliqub",
+    "user_message": "Summarize my documents",
+    "ai_response": "Please provide me with the documents you wish me to summarize. I need the text of the documents to be able to create a summary for you.\n",
+    "timestamp": "2025-07-15T23:24:39.333052",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
+  },
+  "d9152746-887d-4e8c-8263-1e7eb4ac697f": {
+    "id": "d9152746-887d-4e8c-8263-1e7eb4ac697f",
+    "project_id": "sqmuliqub",
+    "user_message": "Summarize my documents",
+    "ai_response": "Please provide me with the documents you want me to summarize.  I need the text of the documents to be able to help you.\n",
+    "timestamp": "2025-07-15T23:27:07.215902",
+    "sources": [],
+    "context_used": false,
+    "documents_used": true,
+    "metadata": {
+      "model": "gemini-1.5-flash",
+      "context_length": 0,
+      "sources_count": 0
+    }
   }
 }

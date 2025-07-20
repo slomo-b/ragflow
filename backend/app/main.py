@@ -1,556 +1,426 @@
 #!/usr/bin/env python3
 """
-RagFlow Backend - Python 3.13 Compatible Version
-Automatische Fallback-Lösung für ML-Dependencies
+RagFlow Backend - Modern Version 2025
+Mit FastAPI 0.115+, Pydantic V2, Python 3.13
 """
 
 import asyncio
-import logging
 import json
-import traceback
 import os
 import sys
 import uuid
-import re
-from pathlib import Path
-from datetime import datetime
-from typing import List, Optional, Dict, Any, Union
 from contextlib import asynccontextmanager
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional, Dict, Any, Annotated
 
-# FastAPI imports
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, BackgroundTasks, Request
+# Modern FastAPI imports
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
-# Try to import ML libraries with fallbacks
-ML_AVAILABLE = False
-SKLEARN_AVAILABLE = False
-SENTENCE_TRANSFORMERS_AVAILABLE = False
+# Pydantic V2 imports
+from pydantic import BaseModel, Field, ConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Rich für schöne Ausgaben
 try:
-    import numpy as np
-    ML_AVAILABLE = True
-    print("✓ NumPy available")
+    from rich import print as rprint
+    from rich.console import Console
+    console = Console()
+    RICH_AVAILABLE = True
 except ImportError:
-    print("⚠️ NumPy not available")
+    RICH_AVAILABLE = False
+    def rprint(*args, **kwargs):
+        print(*args, **kwargs)
 
-try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity
-    SKLEARN_AVAILABLE = True
-    print("✓ Scikit-learn available")
-except ImportError:
-    print("⚠️ Scikit-learn not available - using simple text search")
-
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-    print("✓ Sentence Transformers available")
-except ImportError:
-    print("⚠️ Sentence Transformers not available")
-
-# Google AI imports
-try:
-    import google.generativeai as genai
-    GOOGLE_AI_AVAILABLE = True
-    print("✓ Google AI available")
-except ImportError:
-    GOOGLE_AI_AVAILABLE = False
-    print("⚠️ Google AI not available")
-
-# Document processing imports
-try:
-    import PyPDF2
-    from docx import Document as DocxDocument
-    DOCUMENT_PROCESSING_AVAILABLE = True
-    print("✓ Document processing available")
-except ImportError:
-    DOCUMENT_PROCESSING_AVAILABLE = False
-    print("⚠️ Document processing limited")
-
-# === Enhanced Logger ===
-class RagFlowLogger:
-    def __init__(self, log_file: str = "ragflow_backend.log"):
-        self.log_file = Path(log_file)
-        self.setup_logging()
+# === MODERNE KONFIGURATION ===
+class Settings(BaseSettings):
+    """Moderne App-Konfiguration mit Pydantic V2"""
     
-    def setup_logging(self):
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - [%(name)s] %(message)s',
-            handlers=[
-                logging.FileHandler(self.log_file, encoding='utf-8'),
-                logging.StreamHandler(sys.stdout)
-            ]
-        )
-        self.logger = logging.getLogger("RagFlow")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
     
-    def info(self, message: str, component: str = "SYSTEM"):
-        self.logger.info(f"[{component}] {message}")
+    # API Configuration
+    app_name: str = "RagFlow Backend"
+    app_version: str = "3.0.0"
+    debug: bool = False
     
-    def error(self, message: str, component: str = "ERROR"):
-        self.logger.error(f"[{component}] {message}")
+    # Server Configuration
+    host: str = "0.0.0.0"
+    port: int = 8000
+    reload: bool = False
     
-    def warning(self, message: str, component: str = "WARNING"):
-        self.logger.warning(f"[{component}] {message}")
+    # Google AI
+    google_api_key: Optional[str] = Field(default=None, description="Google AI API Key")
+    
+    # File Upload
+    max_file_size: int = Field(default=100_000_000, description="Max file size in bytes (100MB)")
+    upload_dir: Path = Field(default=Path("uploads"), description="Upload directory")
+    data_dir: Path = Field(default=Path("data"), description="Data directory")
+    
+    # RAG Configuration
+    chunk_size: int = Field(default=500, description="Text chunk size for RAG")
+    chunk_overlap: int = Field(default=50, description="Overlap between chunks")
+    top_k: int = Field(default=5, description="Number of top results to return")
 
-logger = RagFlowLogger()
+# Global settings
+settings = Settings()
 
-# === Data Storage ===
-DATA_DIR = Path("./data")
-DATA_DIR.mkdir(exist_ok=True)
-UPLOAD_DIR = Path("./uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Data directories
+settings.data_dir.mkdir(exist_ok=True)
+settings.upload_dir.mkdir(exist_ok=True)
 
-# In-memory databases
-projects_db: Dict[str, Dict] = {}
-documents_db: Dict[str, Dict] = {}
-chats_db: Dict[str, Dict] = {}
+# Global data stores
+projects_db: Dict[str, Any] = {}
+documents_db: Dict[str, Any] = {}
+chats_db: Dict[str, Any] = {}
 
-# === Adaptive RAG System mit Fallbacks ===
-class AdaptiveRAG:
-    """RAG System das sich an verfügbare Libraries anpasst"""
+# === DEPENDENCY CHECKS ===
+class FeatureFlags:
+    """Modern feature detection"""
     
     def __init__(self):
-        self.documents = {}
-        self.chunks = {}
-        self.chunk_index = {}
-        self.project_index = {}
+        self.numpy = self._check_import("numpy")
+        self.sklearn = self._check_import("sklearn")
+        self.sentence_transformers = self._check_import("sentence_transformers")
+        self.google_ai = self._check_import("google.generativeai") and bool(settings.google_api_key)
+        self.pypdf = self._check_import("pypdf")
+        self.docx = self._check_import("docx")
+        self.chromadb = self._check_import("chromadb")
         
-        # Initialize based on available libraries
-        self.search_method = "simple"
-        
-        if SKLEARN_AVAILABLE and ML_AVAILABLE:
-            try:
-                self.tfidf_vectorizer = TfidfVectorizer(
-                    max_features=5000,
-                    stop_words='english',
-                    ngram_range=(1, 2),
-                    lowercase=True
-                )
-                self.tfidf_matrix = None
-                self.chunk_texts = []
-                self.search_method = "tfidf"
-                logger.info("Using TF-IDF search", "RAG")
-            except Exception as e:
-                logger.warning(f"TF-IDF initialization failed: {e}", "RAG")
-        
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
-            try:
-                self.sentence_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-                self.semantic_embeddings = None
-                self.search_method = "hybrid"
-                logger.info("Using hybrid search (TF-IDF + Semantic)", "RAG")
-            except Exception as e:
-                logger.warning(f"Sentence Transformers initialization failed: {e}", "RAG")
-                self.sentence_model = None
-        else:
-            self.sentence_model = None
-        
-        logger.info(f"RAG initialized with method: {self.search_method}", "RAG")
-    
-    def add_document(self, doc_id: str, content: str, metadata: Dict = None, project_ids: List[str] = None):
-        """Füge Dokument zum RAG-System hinzu"""
+    def _check_import(self, module_name: str) -> bool:
         try:
-            metadata = metadata or {}
-            project_ids = project_ids or []
-            
-            if not content or not content.strip():
-                logger.warning(f"Empty content for document {doc_id}", "RAG")
-                return
-            
-            # Store document
-            self.documents[doc_id] = {
-                "content": content,
-                "metadata": metadata,
-                "project_ids": project_ids,
-                "chunks": []
-            }
-            
-            # Create chunks
-            chunks = self._create_chunks(content)
-            chunk_ids = []
-            
-            for i, chunk in enumerate(chunks):
-                chunk_id = f"{doc_id}_chunk_{i}"
-                self.chunks[chunk_id] = {
-                    "content": chunk,
-                    "document_id": doc_id,
-                    "chunk_index": i,
-                    "metadata": metadata
-                }
-                chunk_ids.append(chunk_id)
-                self.chunk_index[chunk_id] = doc_id
-            
-            self.documents[doc_id]["chunks"] = chunk_ids
-            
-            # Update project index
-            for project_id in project_ids:
-                if project_id not in self.project_index:
-                    self.project_index[project_id] = []
-                if doc_id not in self.project_index[project_id]:
-                    self.project_index[project_id].append(doc_id)
-            
-            # Rebuild search indexes if available
-            if self.search_method in ["tfidf", "hybrid"]:
-                self._rebuild_search_indexes()
-            
-            logger.info(f"Document added: {doc_id} with {len(chunks)} chunks", "RAG")
-            
-        except Exception as e:
-            logger.error(f"Error adding document {doc_id}: {e}", "RAG")
+            __import__(module_name)
+            return True
+        except ImportError:
+            return False
     
-    def _create_chunks(self, content: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+    def summary(self) -> Dict[str, bool]:
+        return {
+            "numpy": self.numpy,
+            "sklearn": self.sklearn,
+            "sentence_transformers": self.sentence_transformers,
+            "google_ai": self.google_ai,
+            "pypdf": self.pypdf,
+            "docx": self.docx,
+            "chromadb": self.chromadb
+        }
+
+features = FeatureFlags()
+
+# === PYDANTIC V2 MODELS ===
+class ProjectCreate(BaseModel):
+    """Project creation model"""
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    name: str = Field(..., min_length=1, max_length=100, description="Project name")
+    description: Optional[str] = Field(default="", max_length=500, description="Project description")
+
+class ProjectResponse(BaseModel):
+    """Project response model"""
+    id: str
+    name: str
+    description: str
+    created_at: datetime
+    document_count: int = 0
+
+class DocumentResponse(BaseModel):
+    """Document response model"""
+    id: str
+    filename: str
+    file_size: int
+    file_type: str
+    processing_status: str
+    created_at: datetime
+    project_ids: List[str]
+
+class ChatMessage(BaseModel):
+    """Chat message model"""
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str = Field(..., min_length=1)
+    timestamp: datetime
+
+class ChatRequest(BaseModel):
+    """Chat request model"""
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    message: str = Field(..., min_length=1, max_length=10000)
+    project_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    """Chat response model"""
+    id: str
+    response: str
+    sources: List[str]
+    timestamp: datetime
+
+# === MODERNE RAG SYSTEM ===
+class ModernRAG:
+    """Moderne RAG-Implementation mit optionalen Features"""
+    
+    def __init__(self):
+        self.documents: Dict[str, Dict[str, Any]] = {}
+        self.vectorizer = None
+        self.embeddings_model = None
+        
+        # Initialize TF-IDF if available
+        if features.sklearn:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            self.vectorizer = TfidfVectorizer(
+                max_features=5000,
+                stop_words='english',
+                ngram_range=(1, 2),
+                lowercase=True,
+                strip_accents='unicode'
+            )
+            self.cosine_similarity = cosine_similarity
+        
+        # Initialize embeddings if available
+        if features.sentence_transformers:
+            try:
+                from sentence_transformers import SentenceTransformer
+                self.embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
+                rprint("✅ Sentence Transformers loaded successfully")
+            except Exception as e:
+                rprint(f"⚠️ Failed to load embeddings: {e}")
+    
+    def add_document(self, doc_id: str, content: str, metadata: Dict[str, Any] = None, project_ids: List[str] = None):
+        """Add document to RAG system"""
+        self.documents[doc_id] = {
+            'content': content,
+            'metadata': metadata or {},
+            'project_ids': project_ids or [],
+            'chunks': self._create_chunks(content)
+        }
+        rprint(f"✅ Added document {doc_id} with {len(self._create_chunks(content))} chunks")
+    
+    def _create_chunks(self, text: str) -> List[str]:
         """Create text chunks"""
-        if not content:
-            return []
-        
-        # Clean text
-        content = re.sub(r'\s+', ' ', content.strip())
-        
-        # Split into sentences
-        sentences = re.split(r'[.!?]+', content)
-        sentences = [s.strip() for s in sentences if s.strip()]
-        
+        words = text.split()
         chunks = []
-        current_chunk = ""
         
-        for sentence in sentences:
-            if len(current_chunk) + len(sentence) + 1 > chunk_size and current_chunk:
-                chunks.append(current_chunk.strip())
-                # Overlap
-                words = current_chunk.split()
-                overlap_words = words[-overlap//10:] if len(words) > overlap//10 else []
-                current_chunk = " ".join(overlap_words) + " " + sentence
-            else:
-                current_chunk = current_chunk + " " + sentence if current_chunk else sentence
+        for i in range(0, len(words), settings.chunk_size - settings.chunk_overlap):
+            chunk = ' '.join(words[i:i + settings.chunk_size])
+            if chunk.strip():
+                chunks.append(chunk)
         
-        if current_chunk.strip():
-            chunks.append(current_chunk.strip())
-        
-        return chunks if chunks else [content[:chunk_size]]
+        return chunks
     
-    def _rebuild_search_indexes(self):
-        """Rebuild search indexes if ML libraries available"""
-        if not self.chunks or self.search_method == "simple":
-            return
-        
-        try:
-            self.chunk_texts = [chunk["content"] for chunk in self.chunks.values()]
-            
-            if SKLEARN_AVAILABLE and hasattr(self, 'tfidf_vectorizer'):
-                self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.chunk_texts)
-            
-            if self.sentence_model:
-                self.semantic_embeddings = self.sentence_model.encode(self.chunk_texts)
-            
-            logger.info(f"Search indexes rebuilt: {len(self.chunk_texts)} chunks", "RAG")
-            
-        except Exception as e:
-            logger.error(f"Error rebuilding search indexes: {e}", "RAG")
-    
-    def search(self, query: str, project_id: str = None, top_k: int = 5) -> List[Dict]:
-        """Search with automatic fallback to available methods"""
-        if not query or not self.chunks:
+    def search(self, query: str, project_id: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search documents"""
+        if not self.documents:
             return []
         
+        # Filter by project if specified
+        candidate_docs = {}
+        for doc_id, doc_data in self.documents.items():
+            if project_id is None or project_id in doc_data.get('project_ids', []):
+                candidate_docs[doc_id] = doc_data
+        
+        if not candidate_docs:
+            return []
+        
+        # Use embeddings if available, otherwise TF-IDF
+        if self.embeddings_model:
+            return self._embedding_search(query, candidate_docs, limit)
+        elif features.sklearn:
+            return self._tfidf_search(query, candidate_docs, limit)
+        else:
+            return self._keyword_search(query, candidate_docs, limit)
+    
+    def _embedding_search(self, query: str, candidate_docs: Dict, limit: int) -> List[Dict[str, Any]]:
+        """Embedding-based search"""
         try:
-            # Filter chunks by project
-            relevant_chunks = []
-            for chunk_id, chunk_data in self.chunks.items():
-                doc_id = chunk_data["document_id"]
-                if doc_id in self.documents:
-                    doc_project_ids = self.documents[doc_id].get("project_ids", [])
-                    if not project_id or project_id in doc_project_ids:
-                        relevant_chunks.append(chunk_id)
+            query_embedding = self.embeddings_model.encode([query])
+            results = []
             
-            if not relevant_chunks:
-                logger.warning(f"No chunks found for project {project_id}", "RAG")
-                return []
+            for doc_id, doc_data in candidate_docs.items():
+                chunks = doc_data['chunks']
+                if chunks:
+                    chunk_embeddings = self.embeddings_model.encode(chunks)
+                    similarities = self.embeddings_model.similarity(query_embedding, chunk_embeddings)[0]
+                    
+                    best_idx = similarities.argmax()
+                    best_score = float(similarities[best_idx])
+                    
+                    if best_score > 0.3:  # Threshold
+                        results.append({
+                            'document_id': doc_id,
+                            'content': chunks[best_idx],
+                            'score': best_score,
+                            'metadata': doc_data['metadata']
+                        })
             
-            # Choose search method based on availability
-            if self.search_method == "hybrid":
-                return self._hybrid_search(query, relevant_chunks, top_k)
-            elif self.search_method == "tfidf":
-                return self._tfidf_search(query, relevant_chunks, top_k)
-            else:
-                return self._simple_search(query, relevant_chunks, top_k)
-            
+            return sorted(results, key=lambda x: x['score'], reverse=True)[:limit]
+        
         except Exception as e:
-            logger.error(f"Search error: {e}", "RAG")
-            # Fallback to simple search
-            return self._simple_search(query, relevant_chunks, top_k)
+            rprint(f"⚠️ Embedding search failed: {e}")
+            return self._keyword_search(query, candidate_docs, limit)
     
-    def _simple_search(self, query: str, relevant_chunks: List[str], top_k: int) -> List[Dict]:
-        """Simple keyword-based search (no ML required)"""
-        query_lower = query.lower()
-        results = []
-        
-        for chunk_id in relevant_chunks:
-            chunk_data = self.chunks[chunk_id]
-            content = chunk_data["content"]
-            content_lower = content.lower()
-            
-            if query_lower in content_lower:
-                # Count occurrences for scoring
-                count = content_lower.count(query_lower)
-                score = count / len(content.split()) * 100
-                
-                results.append({
-                    "document_id": chunk_data["document_id"],
-                    "content": content,
-                    "score": score,
-                    "method": "simple_keyword",
-                    "chunk_id": chunk_id
-                })
-        
-        results.sort(key=lambda x: x["score"], reverse=True)
-        return results[:top_k]
-    
-    def _tfidf_search(self, query: str, relevant_chunks: List[str], top_k: int) -> List[Dict]:
-        """TF-IDF search if sklearn available"""
-        if not SKLEARN_AVAILABLE or not hasattr(self, 'tfidf_matrix'):
-            return self._simple_search(query, relevant_chunks, top_k)
-        
+    def _tfidf_search(self, query: str, candidate_docs: Dict, limit: int) -> List[Dict[str, Any]]:
+        """TF-IDF based search"""
         try:
-            query_vector = self.tfidf_vectorizer.transform([query])
+            all_chunks = []
+            chunk_doc_mapping = []
             
-            # Get relevant chunk indices
-            chunk_indices = []
-            chunk_ids_list = list(self.chunks.keys())
+            for doc_id, doc_data in candidate_docs.items():
+                for chunk in doc_data['chunks']:
+                    all_chunks.append(chunk)
+                    chunk_doc_mapping.append(doc_id)
             
-            for chunk_id in relevant_chunks:
-                try:
-                    idx = chunk_ids_list.index(chunk_id)
-                    chunk_indices.append(idx)
-                except ValueError:
-                    continue
-            
-            if not chunk_indices:
+            if not all_chunks:
                 return []
+            
+            # Fit TF-IDF
+            tfidf_matrix = self.vectorizer.fit_transform(all_chunks + [query])
+            query_vector = tfidf_matrix[-1]
+            chunk_vectors = tfidf_matrix[:-1]
             
             # Calculate similarities
-            similarities = cosine_similarity(query_vector, self.tfidf_matrix[chunk_indices]).flatten()
+            similarities = self.cosine_similarity(query_vector, chunk_vectors).flatten()
             
             # Get top results
-            top_indices = np.argsort(similarities)[::-1][:top_k]
+            top_indices = similarities.argsort()[-limit:][::-1]
             
             results = []
-            for i in top_indices:
-                if similarities[i] > 0.05:
-                    chunk_idx = chunk_indices[i]
-                    chunk_id = chunk_ids_list[chunk_idx]
-                    chunk_data = self.chunks[chunk_id]
-                    
+            for idx in top_indices:
+                if similarities[idx] > 0.1:
+                    doc_id = chunk_doc_mapping[idx]
                     results.append({
-                        "document_id": chunk_data["document_id"],
-                        "content": chunk_data["content"],
-                        "score": float(similarities[i]),
-                        "method": "tfidf",
-                        "chunk_id": chunk_id
+                        'document_id': doc_id,
+                        'content': all_chunks[idx],
+                        'score': float(similarities[idx]),
+                        'metadata': candidate_docs[doc_id]['metadata']
                     })
             
             return results
-            
+        
         except Exception as e:
-            logger.error(f"TF-IDF search error: {e}", "RAG")
-            return self._simple_search(query, relevant_chunks, top_k)
+            rprint(f"⚠️ TF-IDF search failed: {e}")
+            return self._keyword_search(query, candidate_docs, limit)
     
-    def _hybrid_search(self, query: str, relevant_chunks: List[str], top_k: int) -> List[Dict]:
-        """Hybrid search combining TF-IDF and semantic"""
-        # Get TF-IDF results
-        tfidf_results = self._tfidf_search(query, relevant_chunks, top_k)
+    def _keyword_search(self, query: str, candidate_docs: Dict, limit: int) -> List[Dict[str, Any]]:
+        """Fallback keyword search"""
+        query_words = set(query.lower().split())
+        results = []
         
-        # Get semantic results if available
-        semantic_results = []
-        if self.sentence_model and self.semantic_embeddings is not None:
-            try:
-                query_embedding = self.sentence_model.encode([query])
+        for doc_id, doc_data in candidate_docs.items():
+            for chunk in doc_data['chunks']:
+                chunk_words = set(chunk.lower().split())
+                score = len(query_words.intersection(chunk_words)) / len(query_words)
                 
-                chunk_indices = []
-                chunk_ids_list = list(self.chunks.keys())
-                
-                for chunk_id in relevant_chunks:
-                    try:
-                        idx = chunk_ids_list.index(chunk_id)
-                        chunk_indices.append(idx)
-                    except ValueError:
-                        continue
-                
-                if chunk_indices:
-                    relevant_embeddings = self.semantic_embeddings[chunk_indices]
-                    similarities = cosine_similarity(query_embedding, relevant_embeddings).flatten()
-                    
-                    top_indices = np.argsort(similarities)[::-1][:top_k]
-                    
-                    for i in top_indices:
-                        if similarities[i] > 0.2:
-                            chunk_idx = chunk_indices[i]
-                            chunk_id = chunk_ids_list[chunk_idx]
-                            chunk_data = self.chunks[chunk_id]
-                            
-                            semantic_results.append({
-                                "document_id": chunk_data["document_id"],
-                                "content": chunk_data["content"],
-                                "score": float(similarities[i]),
-                                "method": "semantic",
-                                "chunk_id": chunk_id
-                            })
-            except Exception as e:
-                logger.error(f"Semantic search error: {e}", "RAG")
+                if score > 0:
+                    results.append({
+                        'document_id': doc_id,
+                        'content': chunk,
+                        'score': score,
+                        'metadata': doc_data['metadata']
+                    })
         
-        # Combine results
-        combined = {}
-        
-        # TF-IDF results (weight 0.6)
-        for result in tfidf_results:
-            chunk_id = result["chunk_id"]
-            combined[chunk_id] = result.copy()
-            combined[chunk_id]["score"] = result["score"] * 0.6
-            combined[chunk_id]["methods"] = ["tfidf"]
-        
-        # Semantic results (weight 0.4)
-        for result in semantic_results:
-            chunk_id = result["chunk_id"]
-            if chunk_id in combined:
-                combined[chunk_id]["score"] += result["score"] * 0.4
-                combined[chunk_id]["methods"].append("semantic")
-            else:
-                combined[chunk_id] = result.copy()
-                combined[chunk_id]["score"] = result["score"] * 0.4
-                combined[chunk_id]["methods"] = ["semantic"]
-        
-        # Sort and return top results
-        results = list(combined.values())
-        results.sort(key=lambda x: x["score"], reverse=True)
-        
-        return results[:top_k]
+        return sorted(results, key=lambda x: x['score'], reverse=True)[:limit]
 
-# Initialize adaptive RAG system
-adaptive_rag = AdaptiveRAG()
-
-# === Document Processor ===
-class DocumentProcessor:
-    @staticmethod
-    def extract_text_from_pdf(file_path: Path) -> str:
-        if not DOCUMENT_PROCESSING_AVAILABLE:
-            return "[PDF processing not available]"
-        
-        try:
-            text = ""
-            with open(file_path, 'rb') as file:
-                reader = PyPDF2.PdfReader(file)
-                for page in reader.pages:
-                    text += page.extract_text() + "\n"
-            return text.strip()
-        except Exception as e:
-            logger.error(f"PDF extraction error: {e}", "PROCESSING")
-            return f"[Error extracting PDF: {e}]"
+# === MODERNE AI CHAT ===
+class ModernAIChat:
+    """Moderne AI Chat mit Google AI"""
     
-    @staticmethod
-    def extract_text_from_docx(file_path: Path) -> str:
-        if not DOCUMENT_PROCESSING_AVAILABLE:
-            return "[DOCX processing not available]"
-        
-        try:
-            doc = DocxDocument(file_path)
-            text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-            return text.strip()
-        except Exception as e:
-            logger.error(f"DOCX extraction error: {e}", "PROCESSING")
-            return f"[Error extracting DOCX: {e}]"
-    
-    @staticmethod
-    def extract_text_from_txt(file_path: Path) -> str:
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                return file.read().strip()
-        except Exception as e:
-            logger.error(f"TXT extraction error: {e}", "PROCESSING")
-            return f"[Error extracting TXT: {e}]"
-
-# === Google AI Integration ===
-class GoogleAIChat:
     def __init__(self):
-        self.model = None
-        self.initialize()
-    
-    def initialize(self):
-        if not GOOGLE_AI_AVAILABLE:
-            logger.warning("Google AI not available", "AI")
-            return False
+        self.enabled = False
         
-        api_key = os.getenv('GOOGLE_API_KEY')
-        if not api_key:
-            logger.warning("Google AI API key not configured", "AI")
-            return False
+        if features.google_ai:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=settings.google_api_key)
+                self.model = genai.GenerativeModel('gemini-1.5-pro')
+                self.enabled = True
+                rprint("✅ Google AI configured successfully")
+            except Exception as e:
+                rprint(f"⚠️ Failed to configure Google AI: {e}")
+    
+    async def generate_response(self, query: str, context: str = "", project_id: Optional[str] = None) -> str:
+        """Generate AI response"""
+        if not self.enabled:
+            return "AI chat is not available. Please configure GOOGLE_API_KEY."
         
         try:
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
-            logger.info("Google AI initialized successfully", "AI")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to initialize Google AI: {e}", "AI")
-            return False
-    
-    def generate_response(self, prompt: str) -> str:
-        if not self.model:
-            return f"AI response for: {prompt[:100]}... (AI not available - please set GOOGLE_API_KEY)"
-        
-        try:
-            response = self.model.generate_content(prompt)
+            prompt = f"""Based on the following context from documents, answer the user's question.
+
+Context:
+{context}
+
+Question: {query}
+
+Please provide a helpful and accurate answer based on the context provided. If the context doesn't contain enough information to answer the question, say so."""
+            
+            response = await asyncio.to_thread(self.model.generate_content, prompt)
             return response.text
+        
         except Exception as e:
-            logger.error(f"AI generation failed: {e}", "AI")
-            return f"Entschuldigung, bei der Generierung der Antwort ist ein Fehler aufgetreten: {str(e)}"
+            rprint(f"⚠️ AI generation failed: {e}")
+            return f"Sorry, I encountered an error generating a response: {str(e)}"
 
-ai_chat = GoogleAIChat()
+# Initialize components
+rag_system = ModernRAG()
+ai_chat = ModernAIChat()
 
-# === Data Management ===
-def save_data():
+# === DATA MANAGEMENT ===
+async def save_data():
+    """Async data saving"""
     try:
-        with open(DATA_DIR / "projects.json", "w", encoding="utf-8") as f:
-            json.dump(projects_db, f, indent=2, ensure_ascii=False)
+        data_files = {
+            "projects.json": projects_db,
+            "documents.json": documents_db, 
+            "chats.json": chats_db
+        }
         
-        with open(DATA_DIR / "documents.json", "w", encoding="utf-8") as f:
-            json.dump(documents_db, f, indent=2, ensure_ascii=False)
+        for filename, data in data_files.items():
+            file_path = settings.data_dir / filename
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False, default=str)
         
-        with open(DATA_DIR / "chats.json", "w", encoding="utf-8") as f:
-            json.dump(chats_db, f, indent=2, ensure_ascii=False)
-        
+        rprint("✅ Data saved successfully")
+    
     except Exception as e:
-        logger.error(f"Failed to save data: {e}", "DATA")
+        rprint(f"❌ Failed to save data: {e}")
 
-def load_data():
+async def load_data():
+    """Async data loading"""
     global projects_db, documents_db, chats_db
     
     try:
-        projects_file = DATA_DIR / "projects.json"
-        if projects_file.exists():
-            with open(projects_file, "r", encoding="utf-8") as f:
-                projects_db = json.load(f)
+        data_files = {
+            "projects.json": lambda: projects_db,
+            "documents.json": lambda: documents_db,
+            "chats.json": lambda: chats_db
+        }
         
-        documents_file = DATA_DIR / "documents.json"
-        if documents_file.exists():
-            with open(documents_file, "r", encoding="utf-8") as f:
-                documents_db = json.load(f)
+        for filename, get_dict in data_files.items():
+            file_path = settings.data_dir / filename
+            if file_path.exists():
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if filename == "projects.json":
+                        projects_db.update(data)
+                    elif filename == "documents.json":
+                        documents_db.update(data)
+                    elif filename == "chats.json":
+                        chats_db.update(data)
         
-        chats_file = DATA_DIR / "chats.json"
-        if chats_file.exists():
-            with open(chats_file, "r", encoding="utf-8") as f:
-                chats_db = json.load(f)
+        # Load documents into RAG
+        await load_documents_into_rag()
         
-        logger.info(f"Loaded {len(projects_db)} projects, {len(documents_db)} documents, {len(chats_db)} chats", "DATA")
-        
-        # Rebuild RAG system
-        load_documents_into_rag()
-        
+        rprint(f"✅ Loaded {len(projects_db)} projects, {len(documents_db)} documents, {len(chats_db)} chats")
+    
     except Exception as e:
-        logger.error(f"Failed to load data: {e}", "DATA")
+        rprint(f"❌ Failed to load data: {e}")
 
-def load_documents_into_rag():
+async def load_documents_into_rag():
+    """Load documents into RAG system"""
     loaded_count = 0
     
     for doc_id, doc_data in documents_db.items():
@@ -558,7 +428,7 @@ def load_documents_into_rag():
             "extracted_text" in doc_data):
             
             project_ids = doc_data.get("project_ids", [])
-            adaptive_rag.add_document(
+            rag_system.add_document(
                 doc_id=doc_id,
                 content=doc_data["extracted_text"],
                 metadata=doc_data.get("metadata", {}),
@@ -566,624 +436,305 @@ def load_documents_into_rag():
             )
             loaded_count += 1
     
-    logger.info(f"Loaded {loaded_count} documents into RAG system", "RAG")
+    rprint(f"✅ Loaded {loaded_count} documents into RAG system")
 
-# === FastAPI App ===
+# === LIFESPAN MANAGEMENT ===
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting RagFlow Backend...", "STARTUP")
-    load_data()
-    logger.info("RagFlow Backend ready!", "STARTUP")
+    """Modern lifespan management"""
+    rprint("🚀 Starting RagFlow Backend...")
+    await load_data()
+    rprint("✅ RagFlow Backend ready!")
     yield
-    logger.info("Shutting down RagFlow Backend...", "SHUTDOWN")
+    rprint("👋 Shutting down RagFlow Backend...")
+    await save_data()
 
+# === FASTAPI APP ===
 app = FastAPI(
-    title="RagFlow Backend",
-    description="AI-powered document analysis with adaptive RAG (Python 3.13 compatible)",
-    version="2.1.0",
+    title=settings.app_name,
+    description="AI-powered document analysis with modern RAG (Latest FastAPI + Pydantic V2)",
+    version=settings.app_version,
     lifespan=lifespan
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# === Health Endpoints ===
-@app.get("/api/health")
-async def health_check():
+# === DEPENDENCY INJECTION ===
+async def get_settings() -> Settings:
+    """Get settings dependency"""
+    return settings
+
+# === HEALTH ENDPOINTS ===
+@app.get("/")
+async def root():
+    """Root endpoint"""
     return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "2.1.0",
-        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-        "compatibility": "Python 3.13+"
+        "message": "🚀 RagFlow Backend is running!",
+        "version": settings.app_version,
+        "docs": "/docs"
     }
 
-@app.get("/api/health/detailed")
-async def detailed_health_check():
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint"""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "2.1.0",
-        "components": {
-            "database": "operational",
-            "google_ai": "available" if ai_chat.model else "unavailable",
-            "rag_system": f"operational ({adaptive_rag.search_method})",
-            "document_processing": "available" if DOCUMENT_PROCESSING_AVAILABLE else "limited",
-            "ml_features": {
-                "numpy": ML_AVAILABLE,
-                "sklearn": SKLEARN_AVAILABLE,
-                "sentence_transformers": SENTENCE_TRANSFORMERS_AVAILABLE
-            }
+        "timestamp": datetime.utcnow(),
+        "version": settings.app_version,
+        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        "features": features.summary()
+    }
+
+@app.get("/api/system/info")
+async def system_info():
+    """System information endpoint"""
+    return {
+        "app": {
+            "name": settings.app_name,
+            "version": settings.app_version,
+            "python_version": sys.version
         },
-        "statistics": {
+        "features": features.summary(),
+        "stats": {
             "projects": len(projects_db),
             "documents": len(documents_db),
             "chats": len(chats_db),
-            "rag_documents": len(adaptive_rag.documents),
-            "rag_chunks": len(adaptive_rag.chunks)
+            "rag_documents": len(rag_system.documents)
+        },
+        "settings": {
+            "chunk_size": settings.chunk_size,
+            "chunk_overlap": settings.chunk_overlap,
+            "top_k": settings.top_k
         }
     }
 
-# === Project Endpoints ===
-@app.get("/api/v1/projects/")
-async def get_projects(skip: int = 0, limit: int = 10, search: str = None):
-    projects = list(projects_db.values())
+# === PROJECT ENDPOINTS ===
+@app.get("/api/projects", response_model=List[ProjectResponse])
+async def get_projects():
+    """Get all projects"""
+    projects = []
+    for project_id, project_data in projects_db.items():
+        doc_count = sum(1 for doc in documents_db.values() 
+                       if project_id in doc.get("project_ids", []))
+        
+        projects.append(ProjectResponse(
+            id=project_id,
+            name=project_data["name"],
+            description=project_data.get("description", ""),
+            created_at=datetime.fromisoformat(project_data["created_at"]) 
+                      if isinstance(project_data["created_at"], str) 
+                      else project_data["created_at"],
+            document_count=doc_count
+        ))
     
-    if search:
-        search_lower = search.lower()
-        projects = [p for p in projects if search_lower in p.get("name", "").lower()]
-    
-    projects.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-    
-    total = len(projects)
-    projects = projects[skip:skip + limit]
-    
-    return {
-        "projects": projects,
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
+    return projects
 
-@app.post("/api/v1/projects/")
-async def create_project(data: dict):
-    project_id = str(uuid.uuid4())[:8]
+@app.post("/api/projects", response_model=ProjectResponse)
+async def create_project(project: ProjectCreate):
+    """Create new project"""
+    project_id = str(uuid.uuid4())
+    timestamp = datetime.utcnow()
     
-    project = {
-        "id": project_id,
-        "name": data.get("name", f"Project {project_id}"),
-        "description": data.get("description", ""),
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
-        "document_ids": [],
-        "document_count": 0,
-        "chat_count": 0,
-        "settings": {}
+    project_data = {
+        "name": project.name,
+        "description": project.description,
+        "created_at": timestamp.isoformat()
     }
     
-    projects_db[project_id] = project
-    save_data()
+    projects_db[project_id] = project_data
+    await save_data()
     
-    logger.info(f"Created project: {project['name']}", "PROJECT")
-    return project
+    return ProjectResponse(
+        id=project_id,
+        name=project_data["name"],
+        description=project_data["description"],
+        created_at=timestamp,
+        document_count=0
+    )
 
-@app.get("/api/v1/projects/{project_id}")
-async def get_project(project_id: str):
+# === DOCUMENT ENDPOINTS ===
+@app.post("/api/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    project_id: str = Form(...)
+):
+    """Upload and process document"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    project = projects_db[project_id].copy()
+    if file.size and file.size > settings.max_file_size:
+        raise HTTPException(status_code=413, detail="File too large")
     
-    documents = [
-        doc for doc in documents_db.values()
-        if project_id in doc.get("project_ids", [])
-    ]
-    project["documents"] = documents
+    # Save file
+    file_id = str(uuid.uuid4())
+    file_path = settings.upload_dir / f"{file_id}_{file.filename}"
     
-    return project
-
-# === Document Endpoints ===
-@app.post("/api/v1/documents/upload")
-async def upload_documents(
-    background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(...),
-    project_id: Optional[str] = Form(None)
-):
-    uploaded_docs = []
-    
-    for file in files:
-        try:
-            file_id = str(uuid.uuid4())
-            file_extension = Path(file.filename).suffix.lower()
-            safe_filename = f"{file_id}{file_extension}"
-            file_path = UPLOAD_DIR / safe_filename
-            
-            content = await file.read()
-            with open(file_path, "wb") as f:
-                f.write(content)
-            
-            document_data = {
-                "id": file_id,
-                "filename": file.filename,
-                "file_type": file_extension,
-                "file_size": len(content),
-                "file_path": str(file_path),
-                "uploaded_at": datetime.utcnow().isoformat(),
-                "processing_status": "pending",
-                "project_ids": [project_id] if project_id else [],
-                "tags": [],
-                "metadata": {}
-            }
-            
-            documents_db[file_id] = document_data
-            
-            if project_id and project_id in projects_db:
-                projects_db[project_id]["document_ids"].append(file_id)
-                projects_db[project_id]["document_count"] = len(projects_db[project_id]["document_ids"])
-                projects_db[project_id]["updated_at"] = datetime.utcnow().isoformat()
-            
-            uploaded_docs.append(document_data)
-            
-            background_tasks.add_task(process_document, file_id)
-            
-            logger.info(f"Uploaded document: {file.filename}", "UPLOAD")
-            
-        except Exception as e:
-            logger.error(f"Failed to upload {file.filename}: {e}", "UPLOAD")
-            continue
-    
-    save_data()
-    return {"uploaded": len(uploaded_docs), "documents": uploaded_docs}
-
-async def process_document(document_id: str):
     try:
-        doc = documents_db.get(document_id)
-        if not doc:
-            return
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
         
-        doc["processing_status"] = "processing"
-        doc["processing_started_at"] = datetime.utcnow().isoformat()
+        # Process document
+        extracted_text = await process_document(file_path, file.content_type)
         
-        file_path = Path(doc["file_path"])
-        file_type = doc["file_type"].lower()
+        # Store document metadata
+        doc_data = {
+            "filename": file.filename,
+            "file_size": len(content),
+            "file_type": file.content_type or "unknown",
+            "file_path": str(file_path),
+            "project_ids": [project_id],
+            "processing_status": "completed" if extracted_text else "failed",
+            "created_at": datetime.utcnow().isoformat(),
+            "extracted_text": extracted_text,
+            "metadata": {
+                "upload_filename": file.filename,
+                "content_type": file.content_type
+            }
+        }
         
-        if file_type == ".pdf":
-            extracted_text = DocumentProcessor.extract_text_from_pdf(file_path)
-        elif file_type in [".docx", ".doc"]:
-            extracted_text = DocumentProcessor.extract_text_from_docx(file_path)
-        elif file_type == ".txt":
-            extracted_text = DocumentProcessor.extract_text_from_txt(file_path)
+        documents_db[file_id] = doc_data
+        
+        # Add to RAG system if processing succeeded
+        if extracted_text:
+            rag_system.add_document(
+                doc_id=file_id,
+                content=extracted_text,
+                metadata=doc_data["metadata"],
+                project_ids=[project_id]
+            )
+        
+        await save_data()
+        
+        return {
+            "document_id": file_id,
+            "filename": file.filename,
+            "status": doc_data["processing_status"],
+            "message": "Document uploaded and processed successfully" if extracted_text else "Document uploaded but processing failed",
+            "extracted_length": len(extracted_text) if extracted_text else 0
+        }
+        
+    except Exception as e:
+        rprint(f"❌ Document upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+async def process_document(file_path: Path, content_type: str) -> str:
+    """Extract text from document using modern libraries"""
+    try:
+        if content_type == "text/plain":
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+        
+        elif content_type == "application/pdf" and features.pypdf:
+            try:
+                from pypdf import PdfReader
+                reader = PdfReader(file_path)
+                text = ""
+                for page in reader.pages:
+                    text += page.extract_text() + "\n"
+                return text
+            except Exception as e:
+                rprint(f"⚠️ PDF processing failed: {e}")
+                return ""
+        
+        elif "wordprocessingml.document" in (content_type or "") and features.docx:
+            try:
+                from docx import Document
+                doc = Document(file_path)
+                text = ""
+                for paragraph in doc.paragraphs:
+                    text += paragraph.text + "\n"
+                return text
+            except Exception as e:
+                rprint(f"⚠️ DOCX processing failed: {e}")
+                return ""
+        
         else:
-            extracted_text = f"[Unsupported file type: {file_type}]"
-        
-        doc["extracted_text"] = extracted_text
-        doc["text_length"] = len(extracted_text)
-        doc["processing_status"] = "completed"
-        doc["processed_at"] = datetime.utcnow().isoformat()
-        
-        # Add to RAG system
-        project_ids = doc.get("project_ids", [])
-        adaptive_rag.add_document(
-            doc_id=document_id,
-            content=extracted_text,
-            metadata=doc.get("metadata", {}),
-            project_ids=project_ids
+            # Try to read as text
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+    
+    except Exception as e:
+        rprint(f"❌ Document processing failed: {e}")
+        return ""
+
+# === CHAT ENDPOINTS ===
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """Chat with documents"""
+    try:
+        # Search for relevant documents
+        search_results = rag_system.search(
+            query=request.message,
+            project_id=request.project_id,
+            limit=settings.top_k
         )
         
-        save_data()
-        logger.info(f"Document processed and added to RAG: {doc['filename']}", "PROCESSING")
-        
-    except Exception as e:
-        doc["processing_status"] = "failed"
-        doc["processing_error"] = str(e)
-        save_data()
-        logger.error(f"Failed to process document {document_id}: {e}", "PROCESSING")
-
-@app.get("/api/v1/documents/")
-async def get_documents(skip: int = 0, limit: int = 10, project_id: Optional[str] = None):
-    documents = list(documents_db.values())
-    
-    if project_id:
-        documents = [doc for doc in documents if project_id in doc.get("project_ids", [])]
-    
-    documents.sort(key=lambda x: x.get("uploaded_at", ""), reverse=True)
-    
-    total = len(documents)
-    documents = documents[skip:skip + limit]
-    
-    return {
-        "documents": documents,
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
-
-@app.delete("/api/v1/documents/{document_id}")
-async def delete_document(document_id: str):
-    if document_id not in documents_db:
-        raise HTTPException(status_code=404, detail="Document not found")
-    
-    document = documents_db[document_id]
-    
-    try:
-        file_path = Path(document["file_path"])
-        if file_path.exists():
-            file_path.unlink()
-    except Exception as e:
-        logger.warning(f"Failed to delete file {document['file_path']}: {e}", "DELETE")
-    
-    # Remove from projects
-    for project in projects_db.values():
-        if document_id in project.get("document_ids", []):
-            project["document_ids"].remove(document_id)
-            project["document_count"] = len(project["document_ids"])
-            project["updated_at"] = datetime.utcnow().isoformat()
-    
-    # Remove from RAG system
-    if document_id in adaptive_rag.documents:
-        del adaptive_rag.documents[document_id]
-        chunks_to_remove = [cid for cid, chunk in adaptive_rag.chunks.items() 
-                           if chunk["document_id"] == document_id]
-        for chunk_id in chunks_to_remove:
-            del adaptive_rag.chunks[chunk_id]
-            if chunk_id in adaptive_rag.chunk_index:
-                del adaptive_rag.chunk_index[chunk_id]
-        
-        if adaptive_rag.search_method in ["tfidf", "hybrid"]:
-            adaptive_rag._rebuild_search_indexes()
-    
-    del documents_db[document_id]
-    save_data()
-    
-    logger.info(f"Deleted document: {document['filename']}", "DELETE")
-    return {"message": f"Document '{document['filename']}' deleted"}
-
-# === Chat Endpoints ===
-@app.post("/api/v1/chat")
-async def chat_endpoint(request: Request):
-    try:
-        body = await request.json()
-        logger.info(f"Chat request received for project: {body.get('project_id')}", "CHAT")
-        
-        # Parse message
-        if "messages" in body:
-            messages = body.get("messages", [])
-            user_messages = [msg for msg in messages if msg.get("role") == "user"]
-            message = user_messages[-1].get("content", "") if user_messages else ""
-        else:
-            message = body.get("message", "")
-        
-        project_id = body.get("project_id")
-        use_documents = body.get("use_documents", True)
-        
-        if not message:
-            raise HTTPException(status_code=400, detail="Message is required")
-        
-        logger.info(f"Processing: '{message[:100]}...' for project: {project_id}", "CHAT")
-        
-        # RAG search with project filtering
+        # Prepare context
         context = ""
         sources = []
-        context_length = 0
         
-        if use_documents and adaptive_rag.documents:
-            search_results = adaptive_rag.search(message, project_id=project_id, top_k=5)
-            
-            if search_results:
-                context_parts = []
-                for i, result in enumerate(search_results):
-                    doc_id = result['document_id']
-                    content = result['content']
-                    score = result['score']
-                    methods = result.get('methods', [result.get('method', 'unknown')])
-                    
-                    doc_data = documents_db.get(doc_id, {})
-                    filename = doc_data.get('filename', 'Unknown')
-                    
-                    context_part = f"""=== Dokument {i+1}: {filename} (Relevanz: {score:.3f}, Methoden: {', '.join(methods)}) ===
-{content}
-"""
-                    context_parts.append(context_part)
-                    
-                    sources.append({
-                        "id": doc_id,
-                        "filename": filename,
-                        "excerpt": content[:300] + "..." if len(content) > 300 else content,
-                        "relevance_score": score,
-                        "search_methods": methods,
-                        "type": "document"
-                    })
-                
-                context = "\n".join(context_parts)
-                context_length = len(context)
-                
-                logger.info(f"Found {len(search_results)} relevant documents, context length: {context_length}", "RAG")
-            else:
-                logger.warning(f"No relevant documents found for project {project_id}", "RAG")
+        for result in search_results:
+            context += f"Document: {result['document_id']}\n"
+            context += f"Content: {result['content']}\n"
+            context += f"Score: {result['score']:.3f}\n\n"
+            sources.append(result['document_id'])
         
-        # Enhanced prompt for better AI responses
-        if context:
-            enhanced_prompt = f"""Du bist ein hilfreicher AI-Assistent, der Dokumente analysiert und Fragen dazu beantwortet.
-
-WICHTIGE KONTEXTINFORMATIONEN AUS DOKUMENTEN:
-{context}
-
-BENUTZERANFRAGE: {message}
-
-ANWEISUNGEN:
-1. Analysiere die bereitgestellten Dokumentinhalte sorgfältig
-2. Beantworte die Benutzeranfrage präzise basierend auf den Dokumentinhalten
-3. Wenn die Antwort in den Dokumenten gefunden wird, zitiere relevante Passagen
-4. Wenn die Information nicht vollständig in den Dokumenten enthalten ist, sage das deutlich
-5. Gib eine strukturierte, hilfreiche und vollständige Antwort
-6. Verwende eine freundliche, professionelle Sprache
-
-Antwort:"""
-            
-            response_text = ai_chat.generate_response(enhanced_prompt)
-        else:
-            fallback_prompt = f"""Benutzeranfrage: {message}
-
-Hinweis: Es wurden keine relevanten Dokumente für diese Anfrage gefunden oder es sind keine Dokumente im aktuellen Projekt verfügbar.
-
-Bitte gib eine hilfreiche Antwort basierend auf deinem allgemeinen Wissen und weise freundlich darauf hin, dass zusätzliche Dokumentinformationen die Antwort verbessern könnten."""
-            
-            response_text = ai_chat.generate_response(fallback_prompt)
-        
-        # Create chat entry
-        chat_id = str(uuid.uuid4())
-        chat_entry = {
-            "id": chat_id,
-            "project_id": project_id,
-            "user_message": message,
-            "ai_response": response_text,
-            "timestamp": datetime.utcnow().isoformat(),
-            "sources": sources,
-            "context_used": bool(context),
-            "context_length": context_length,
-            "documents_searched": len(adaptive_rag.documents),
-            "model": "gemini-1.5-flash",
-            "metadata": {
-                "context_enhanced": bool(context),
-                "sources_count": len(sources),
-                "project_id": project_id,
-                "rag_version": "adaptive",
-                "search_method": adaptive_rag.search_method
-            }
-        }
-        
-        chats_db[chat_id] = chat_entry
-        save_data()
-        
-        # Response
-        response_data = {
-            "response": response_text,
-            "chat_id": chat_id,
-            "project_id": project_id,
-            "timestamp": chat_entry["timestamp"],
-            "sources": sources,
-            "success": True,
-            "model_info": {
-                "model": "gemini-1.5-flash",
-                "context_used": bool(context),
-                "context_length": context_length,
-                "features_used": {
-                    "intelligent_document_search": True,
-                    "adaptive_search": True,
-                    "project_filtering": True,
-                    "context_enhancement": bool(context),
-                    "search_method": adaptive_rag.search_method
-                }
-            },
-            "intelligence_metadata": {
-                "sources_found": len(sources),
-                "context_enhanced": bool(context),
-                "processing_method": f"adaptive_rag_{adaptive_rag.search_method}",
-                "search_methods_used": list(set([method for source in sources for method in source.get("search_methods", [])]))
-            }
-        }
-        
-        logger.info(f"Chat response generated: {len(response_text)} chars, {len(sources)} sources", "CHAT")
-        return response_data
-        
-    except Exception as e:
-        logger.error(f"Chat error: {e}\n{traceback.format_exc()}", "CHAT")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "success": False,
-                "error": str(e),
-                "response": "Es tut mir leid, bei der Verarbeitung Ihrer Anfrage ist ein Fehler aufgetreten."
-            }
+        # Generate AI response
+        ai_response = await ai_chat.generate_response(
+            query=request.message,
+            context=context,
+            project_id=request.project_id
         )
-
-@app.post("/api/v1/chat/test")
-async def test_chat():
-    try:
-        test_response = ai_chat.generate_response("Hello, this is a test message.")
-        return {
-            "status": "success",
-            "response": test_response,
-            "ai_available": ai_chat.model is not None,
-            "rag_method": adaptive_rag.search_method
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "ai_available": False
-        }
-
-@app.get("/api/v1/chat/models")
-async def get_available_models():
-    return {
-        "models": [
-            {
-                "id": "gemini-1.5-flash",
-                "name": "Gemini 1.5 Flash",
-                "provider": "Google",
-                "available": ai_chat.model is not None
-            }
-        ],
-        "default": "gemini-1.5-flash",
-        "rag_method": adaptive_rag.search_method
-    }
-
-# === Search Endpoints ===
-@app.post("/api/v1/search")
-async def search_documents(request: dict):
-    query = request.get("query", "")
-    project_id = request.get("project_id")
-    top_k = request.get("top_k", 10)
-    
-    if not query:
-        raise HTTPException(status_code=400, detail="Query is required")
-    
-    try:
-        results = adaptive_rag.search(query, project_id=project_id, top_k=top_k)
         
-        enriched_results = []
-        for result in results:
-            doc_id = result["document_id"]
-            doc_data = documents_db.get(doc_id, {})
-            
-            enriched_result = {
-                **result,
-                "document_filename": doc_data.get("filename", "Unknown"),
-                "document_type": doc_data.get("file_type", ""),
-                "upload_date": doc_data.get("uploaded_at", ""),
-                "file_size": doc_data.get("file_size", 0)
-            }
-            enriched_results.append(enriched_result)
+        # Store chat
+        chat_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow()
         
-        return {
-            "query": query,
-            "results": enriched_results,
-            "total_results": len(enriched_results),
-            "project_id": project_id,
-            "search_method": adaptive_rag.search_method
-        }
-        
-    except Exception as e:
-        logger.error(f"Search error: {e}", "SEARCH")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
-
-# === Analytics Endpoints ===
-@app.get("/api/v1/analytics/overview")
-async def get_analytics_overview():
-    try:
-        project_stats = {
-            "total_projects": len(projects_db),
-            "projects_with_documents": len([p for p in projects_db.values() if p.get("document_count", 0) > 0]),
-            "average_documents_per_project": sum(p.get("document_count", 0) for p in projects_db.values()) / max(len(projects_db), 1)
-        }
-        
-        completed_docs = [d for d in documents_db.values() if d.get("processing_status") == "completed"]
-        document_stats = {
-            "total_documents": len(documents_db),
-            "completed_documents": len(completed_docs),
-            "processing_documents": len([d for d in documents_db.values() if d.get("processing_status") == "processing"]),
-            "failed_documents": len([d for d in documents_db.values() if d.get("processing_status") == "failed"]),
-            "total_text_length": sum(len(d.get("extracted_text", "")) for d in completed_docs),
-            "file_types": {}
-        }
-        
-        for doc in documents_db.values():
-            file_type = doc.get("file_type", "unknown")
-            document_stats["file_types"][file_type] = document_stats["file_types"].get(file_type, 0) + 1
-        
-        chat_stats = {
-            "total_chats": len(chats_db),
-            "chats_with_context": len([c for c in chats_db.values() if c.get("context_used", False)]),
-            "average_sources_per_chat": sum(len(c.get("sources", [])) for c in chats_db.values()) / max(len(chats_db), 1)
-        }
-        
-        rag_stats = {
-            "documents_in_rag": len(adaptive_rag.documents),
-            "total_chunks": len(adaptive_rag.chunks),
-            "projects_indexed": len(adaptive_rag.project_index),
-            "search_method": adaptive_rag.search_method,
-            "ml_features_available": {
-                "numpy": ML_AVAILABLE,
-                "sklearn": SKLEARN_AVAILABLE,
-                "sentence_transformers": SENTENCE_TRANSFORMERS_AVAILABLE
-            }
-        }
-        
-        return {
-            "timestamp": datetime.utcnow().isoformat(),
-            "project_stats": project_stats,
-            "document_stats": document_stats,
-            "chat_stats": chat_stats,
-            "rag_stats": rag_stats
-        }
-        
-    except Exception as e:
-        logger.error(f"Analytics error: {e}", "ANALYTICS")
-        raise HTTPException(status_code=500, detail=f"Analytics failed: {str(e)}")
-
-# === System Status ===
-@app.get("/api/v1/system/status")
-async def get_system_status():
-    return {
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "2.1.0",
-        "status": "operational",
-        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-        "components": {
-            "rag_system": {
-                "status": "operational",
-                "method": adaptive_rag.search_method,
-                "documents": len(adaptive_rag.documents),
-                "chunks": len(adaptive_rag.chunks),
-                "ml_features": {
-                    "numpy": ML_AVAILABLE,
-                    "sklearn": SKLEARN_AVAILABLE,
-                    "sentence_transformers": SENTENCE_TRANSFORMERS_AVAILABLE
+        chat_data = {
+            "project_id": request.project_id,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": request.message,
+                    "timestamp": timestamp.isoformat()
+                },
+                {
+                    "role": "assistant", 
+                    "content": ai_response,
+                    "timestamp": timestamp.isoformat()
                 }
-            },
-            "ai_chat": {
-                "status": "operational" if ai_chat.model else "unavailable",
-                "model": "gemini-1.5-flash" if ai_chat.model else None
-            },
-            "document_processing": {
-                "status": "available" if DOCUMENT_PROCESSING_AVAILABLE else "limited",
-                "pdf_support": DOCUMENT_PROCESSING_AVAILABLE,
-                "docx_support": DOCUMENT_PROCESSING_AVAILABLE
-            }
-        },
-        "data": {
-            "projects": len(projects_db),
-            "documents": len(documents_db),
-            "chats": len(chats_db)
-        },
-        "performance": {
-            "search_method": adaptive_rag.search_method,
-            "adaptive_fallbacks": "enabled"
+            ],
+            "sources": sources,
+            "created_at": timestamp.isoformat()
         }
-    }
-
-# === Error Handlers ===
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc: HTTPException):
-    return JSONResponse(
-        status_code=404,
-        content={"error": "Not found", "detail": str(exc.detail)}
-    )
-
-@app.exception_handler(500)
-async def internal_error_handler(request: Request, exc: Exception):
-    logger.error(f"Internal server error: {exc}", "ERROR")
-    return JSONResponse(
-        status_code=500,
-        content={"error": "Internal server error", "detail": "An unexpected error occurred"}
-    )
+        
+        chats_db[chat_id] = chat_data
+        await save_data()
+        
+        return ChatResponse(
+            id=chat_id,
+            response=ai_response,
+            sources=sources,
+            timestamp=timestamp
+        )
+        
+    except Exception as e:
+        rprint(f"❌ Chat failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
+        log_level="info"
+    )
