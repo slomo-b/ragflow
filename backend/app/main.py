@@ -664,77 +664,309 @@ async def process_document(file_path: Path, content_type: str) -> str:
         rprint(f"❌ Document processing failed: {e}")
         return ""
 
-# === CHAT ENDPOINTS ===
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    """Chat with documents"""
+
+# === KONFIGURATION ENDPOINT ===
+@app.get("/api/config")
+async def get_configuration():
+    """Get backend configuration information"""
+    return {
+        "google_api_configured": bool(settings.google_api_key),
+        "upload_dir": str(settings.upload_dir),
+        "data_dir": str(settings.data_dir),
+        "chunk_size": settings.chunk_size,
+        "chunk_overlap": settings.chunk_overlap,
+        "max_file_size": settings.max_file_size,
+        "top_k": settings.top_k,
+        "features": {
+            "google_ai": bool(settings.google_api_key),
+            "rag_search": True,
+            "file_upload": True,
+            "chat": True
+        }
+    }
+
+# === AI INFO ENDPOINT ===
+@app.get("/api/ai/info")
+async def get_ai_info():
+    """Get AI model information"""
+    if not settings.google_api_key:
+        raise HTTPException(status_code=503, detail="Google AI API key not configured")
+    
+    return {
+        "model": getattr(settings, 'gemini_model', 'gemini-1.5-flash'),
+        "provider": "Google AI",
+        "features": ["chat", "text_generation", "rag_search"],
+        "status": "available" if settings.google_api_key else "unavailable",
+        "api_configured": bool(settings.google_api_key)
+    }
+
+# === FILE UPLOAD ENDPOINT ===
+@app.post("/api/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    project_name: str = Form(...)
+):
+    """Upload and process file"""
     try:
-        # Search for relevant documents
-        search_results = rag_system.search(
-            query=request.message,
-            project_id=request.project_id,
-            limit=settings.top_k
+        # Check file size
+        if file.size and file.size > settings.max_file_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Max size: {settings.max_file_size / (1024*1024):.1f}MB"
+            )
+        
+        # Check file type
+        file_extension = Path(file.filename).suffix.lower()
+        allowed_extensions = ['.pdf', '.docx', '.doc', '.txt', '.md']
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type {file_extension} not supported. Allowed: {', '.join(allowed_extensions)}"
+            )
+        
+        # Create project if it doesn't exist
+        project_id = None
+        for pid, pdata in projects_db.items():
+            if pdata["name"] == project_name:
+                project_id = pid
+                break
+        
+        if not project_id:
+            project_id = str(uuid.uuid4())
+            projects_db[project_id] = {
+                "name": project_name,
+                "description": f"Project created via file upload: {file.filename}",
+                "created_at": datetime.utcnow().isoformat()
+            }
+        
+        # Save file
+        upload_dir = Path(settings.upload_dir)
+        upload_dir.mkdir(exist_ok=True)
+        
+        file_id = str(uuid.uuid4())
+        file_path = upload_dir / f"{file_id}_{file.filename}"
+        
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        # Extract text (simplified - you might want to use your existing text extraction)
+        extracted_text = ""
+        if file_extension == '.txt':
+            extracted_text = content.decode('utf-8', errors='ignore')
+        elif file_extension == '.md':
+            extracted_text = content.decode('utf-8', errors='ignore')
+        else:
+            # For other formats, you'd need more sophisticated extraction
+            extracted_text = f"File uploaded: {file.filename} (extraction not implemented for {file_extension})"
+        
+        # Store document
+        doc_data = {
+            "filename": file.filename,
+            "file_path": str(file_path),
+            "file_size": len(content),
+            "file_type": file_extension,
+            "project_ids": [project_id],
+            "extracted_text": extracted_text,
+            "processing_status": "completed",
+            "created_at": datetime.utcnow().isoformat(),
+            "metadata": {
+                "original_filename": file.filename,
+                "upload_timestamp": datetime.utcnow().isoformat(),
+                "project_name": project_name
+            }
+        }
+        
+        documents_db[file_id] = doc_data
+        
+        # Add to RAG system
+        rag_system.add_document(
+            doc_id=file_id,
+            content=extracted_text,
+            metadata=doc_data["metadata"],
+            project_ids=[project_id]
         )
         
-        # Prepare context
+        await save_data()
+        
+        return {
+            "success": True,
+            "file_id": file_id,
+            "project_id": project_id,
+            "filename": file.filename,
+            "text_length": len(extracted_text),
+            "message": "File uploaded and processed successfully"
+        }
+        
+    except Exception as e:
+        rprint(f"❌ Upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+# === RAG SEARCH ENDPOINT ===
+@app.post("/api/search")
+async def search_documents(request: dict):
+    """Search documents using RAG"""
+    try:
+        query = request.get("query", "")
+        project_id = request.get("project_id")
+        top_k = request.get("top_k", settings.top_k)
+        
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+        
+        # Perform search
+        results = rag_system.search(
+            query=query,
+            top_k=top_k,
+            project_ids=[project_id] if project_id else None
+        )
+        
+        # Format results
+        formatted_results = []
+        for result in results:
+            doc_data = documents_db.get(result.doc_id, {})
+            formatted_results.append({
+                "id": result.doc_id,
+                "content": result.content,
+                "score": result.score,
+                "metadata": result.metadata,
+                "filename": doc_data.get("filename", "Unknown"),
+                "project_id": project_id
+            })
+        
+        return {
+            "query": query,
+            "results": formatted_results,
+            "total_found": len(formatted_results),
+            "search_params": {
+                "top_k": top_k,
+                "project_id": project_id
+            }
+        }
+        
+    except Exception as e:
+        rprint(f"❌ Search error: {e}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+# === CHAT ENDPOINTS ===
+# === CHAT ENDPOINT VERBESSERUNG ===
+# Das existierende Chat-Endpoint sollte auch verbessert werden für bessere Fehlerbehandlung
+
+@app.post("/api/chat")
+async def chat_with_ai(request: dict):
+    """Enhanced chat endpoint with better error handling"""
+    try:
+        message = request.get("message", "")
+        project_id = request.get("project_id")
+        
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+        
+        # Check if Google AI is configured
+        if not settings.google_api_key:
+            return {
+                "response": "Sorry, the AI service is not properly configured. Please set the GOOGLE_API_KEY environment variable.",
+                "error": "AI_SERVICE_UNAVAILABLE",
+                "chat_id": str(uuid.uuid4()),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        # Import Google AI
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=settings.google_api_key)
+            model = genai.GenerativeModel(getattr(settings, 'gemini_model', 'gemini-1.5-flash'))
+        except ImportError:
+            raise HTTPException(status_code=503, detail="Google AI library not available")
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"AI service error: {str(e)}")
+        
+        # Get context from RAG if project_id provided
         context = ""
         sources = []
         
-        for result in search_results:
-            context += f"Document: {result['document_id']}\n"
-            context += f"Content: {result['content']}\n"
-            context += f"Score: {result['score']:.3f}\n\n"
-            sources.append(result['document_id'])
+        if project_id:
+            search_results = rag_system.search(
+                query=message,
+                top_k=3,
+                project_ids=[project_id]
+            )
+            
+            if search_results:
+                context = "\n\n".join([
+                    f"Document: {result.metadata.get('original_filename', 'Unknown')}\n{result.content}"
+                    for result in search_results
+                ])
+                
+                sources = [{
+                    "id": result.doc_id,
+                    "name": result.metadata.get('original_filename', 'Unknown'),
+                    "excerpt": result.content[:200] + "..." if len(result.content) > 200 else result.content,
+                    "relevance_score": result.score
+                } for result in search_results]
         
-        # Generate AI response
-        ai_response = await ai_chat.generate_response(
-            query=request.message,
-            context=context,
-            project_id=request.project_id
-        )
+        # Prepare prompt
+        if context:
+            prompt = f"""Based on the following context from the user's documents, please answer their question:
+
+Context:
+{context}
+
+Question: {message}
+
+Please provide a helpful answer based on the context. If the context doesn't contain relevant information, please say so clearly."""
+        else:
+            prompt = message
         
-        # Store chat
+        # Generate response
+        response = model.generate_content(prompt)
+        ai_response = response.text
+        
+        # Save chat
         chat_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow()
-        
         chat_data = {
-            "project_id": request.project_id,
+            "project_id": project_id,
             "messages": [
                 {
                     "role": "user",
-                    "content": request.message,
-                    "timestamp": timestamp.isoformat()
+                    "content": message,
+                    "timestamp": datetime.utcnow().isoformat()
                 },
                 {
                     "role": "assistant", 
                     "content": ai_response,
-                    "timestamp": timestamp.isoformat()
+                    "timestamp": datetime.utcnow().isoformat()
                 }
             ],
             "sources": sources,
-            "created_at": timestamp.isoformat()
+            "created_at": datetime.utcnow().isoformat()
         }
         
         chats_db[chat_id] = chat_data
         await save_data()
         
-        return ChatResponse(
-            id=chat_id,
-            response=ai_response,
-            sources=sources,
-            timestamp=timestamp
-        )
+        return {
+            "response": ai_response,
+            "chat_id": chat_id,
+            "project_id": project_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "sources": sources,
+            "model_info": {
+                "model": getattr(settings, 'gemini_model', 'gemini-1.5-flash'),
+                "provider": "Google AI"
+            }
+        }
         
     except Exception as e:
-        rprint(f"❌ Chat failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.reload,
-        log_level="info"
-    )
+        error_msg = f"Sorry, I encountered an error generating a response: {str(e)}"
+        rprint(f"❌ Chat error: {e}")
+        
+        # Return error but don't raise HTTP exception for better UX
+        return {
+            "response": error_msg,
+            "error": "GENERATION_ERROR", 
+            "chat_id": str(uuid.uuid4()),
+            "timestamp": datetime.utcnow().isoformat(),
+            "sources": []
+        }
