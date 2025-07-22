@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RagFlow Backend - Modern Version 2025
+RagFlow Backend - Modern Version 2025 mit korrigiertem RAG System
 Mit FastAPI 0.115+, Pydantic V2, Python 3.13
 """
 
@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     
     # Google AI
     google_api_key: Optional[str] = Field(default=None, description="Google AI API Key")
+    gemini_model: str = Field(default="gemini-1.5-flash", description="Gemini model name")
     
     # File Upload
     max_file_size: int = Field(default=100_000_000, description="Max file size in bytes (100MB)")
@@ -159,16 +160,21 @@ class ChatResponse(BaseModel):
     sources: List[str]
     timestamp: datetime
 
-# === MODERNE RAG SYSTEM ===
-class ModernRAG:
-    """Moderne RAG-Implementation mit optionalen Features"""
+# === EINFACHES ABER FUNKTIONALES RAG SYSTEM ===
+class SimpleRAGSystem:
+    """Einfaches aber robustes RAG System"""
     
     def __init__(self):
-        self.documents: Dict[str, Dict[str, Any]] = {}
-        self.vectorizer = None
-        self.embeddings_model = None
+        self.documents = {}
+        self.project_docs = {}
+        self.document_chunks = {}
         
-        # Initialize TF-IDF if available
+        # Initialize TF-IDF if sklearn available
+        self.vectorizer = None
+        self.tfidf_matrix = None
+        self.document_texts = []
+        self.document_ids = []
+        
         if features.sklearn:
             from sklearn.feature_extraction.text import TfidfVectorizer
             from sklearn.metrics.pairwise import cosine_similarity
@@ -180,182 +186,204 @@ class ModernRAG:
                 strip_accents='unicode'
             )
             self.cosine_similarity = cosine_similarity
-        
-        # Initialize embeddings if available
-        if features.sentence_transformers:
-            try:
-                from sentence_transformers import SentenceTransformer
-                self.embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
-                rprint("✅ Sentence Transformers loaded successfully")
-            except Exception as e:
-                rprint(f"⚠️ Failed to load embeddings: {e}")
+            rprint("✅ TF-IDF RAG System initialized")
+        else:
+            rprint("⚠️ Using simple keyword-based RAG (install scikit-learn for better performance)")
     
     def add_document(self, doc_id: str, content: str, metadata: Dict[str, Any] = None, project_ids: List[str] = None):
         """Add document to RAG system"""
-        self.documents[doc_id] = {
-            'content': content,
-            'metadata': metadata or {},
-            'project_ids': project_ids or [],
-            'chunks': self._create_chunks(content)
-        }
-        rprint(f"✅ Added document {doc_id} with {len(self._create_chunks(content))} chunks")
-    
-    def _create_chunks(self, text: str) -> List[str]:
-        """Create text chunks"""
-        words = text.split()
-        chunks = []
-        
-        for i in range(0, len(words), settings.chunk_size - settings.chunk_overlap):
-            chunk = ' '.join(words[i:i + settings.chunk_size])
-            if chunk.strip():
-                chunks.append(chunk)
-        
-        return chunks
-    
-    def search(self, query: str, project_id: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search documents"""
-        if not self.documents:
-            return []
-        
-        # Filter by project if specified
-        candidate_docs = {}
-        for doc_id, doc_data in self.documents.items():
-            if project_id is None or project_id in doc_data.get('project_ids', []):
-                candidate_docs[doc_id] = doc_data
-        
-        if not candidate_docs:
-            return []
-        
-        # Use embeddings if available, otherwise TF-IDF
-        if self.embeddings_model:
-            return self._embedding_search(query, candidate_docs, limit)
-        elif features.sklearn:
-            return self._tfidf_search(query, candidate_docs, limit)
-        else:
-            return self._keyword_search(query, candidate_docs, limit)
-    
-    def _embedding_search(self, query: str, candidate_docs: Dict, limit: int) -> List[Dict[str, Any]]:
-        """Embedding-based search"""
         try:
-            query_embedding = self.embeddings_model.encode([query])
-            results = []
+            if not content or not content.strip():
+                rprint(f"⚠️ Empty content for document {doc_id}")
+                return
             
-            for doc_id, doc_data in candidate_docs.items():
-                chunks = doc_data['chunks']
-                if chunks:
-                    chunk_embeddings = self.embeddings_model.encode(chunks)
-                    similarities = self.embeddings_model.similarity(query_embedding, chunk_embeddings)[0]
-                    
-                    best_idx = similarities.argmax()
-                    best_score = float(similarities[best_idx])
-                    
-                    if best_score > 0.3:  # Threshold
+            # Store document
+            self.documents[doc_id] = {
+                'content': content,
+                'metadata': metadata or {},
+                'project_ids': project_ids or []
+            }
+            
+            # Index by project
+            for project_id in (project_ids or []):
+                if project_id not in self.project_docs:
+                    self.project_docs[project_id] = []
+                if doc_id not in self.project_docs[project_id]:
+                    self.project_docs[project_id].append(doc_id)
+            
+            # Update search index
+            self._update_search_index()
+            
+            rprint(f"✅ Document {doc_id} added to RAG system")
+            
+        except Exception as e:
+            rprint(f"❌ Error adding document {doc_id}: {e}")
+    
+    def _update_search_index(self):
+        """Update the search index with all documents"""
+        try:
+            if not self.vectorizer:
+                return  # Skip if no sklearn
+            
+            # Collect all document texts
+            self.document_texts = []
+            self.document_ids = []
+            
+            for doc_id, doc_data in self.documents.items():
+                self.document_texts.append(doc_data['content'])
+                self.document_ids.append(doc_id)
+            
+            if self.document_texts:
+                # Fit TF-IDF
+                self.tfidf_matrix = self.vectorizer.fit_transform(self.document_texts)
+                rprint(f"✅ Search index updated with {len(self.document_texts)} documents")
+            
+        except Exception as e:
+            rprint(f"❌ Error updating search index: {e}")
+    
+    def search(self, query: str, top_k: int = 5, project_ids: List[str] = None):
+        """Search documents using TF-IDF or simple keyword matching"""
+        try:
+            if not query or not query.strip():
+                return []
+            
+            # Filter documents by project if specified
+            search_docs = {}
+            if project_ids:
+                for project_id in project_ids:
+                    if project_id in self.project_docs:
+                        for doc_id in self.project_docs[project_id]:
+                            if doc_id in self.documents:
+                                search_docs[doc_id] = self.documents[doc_id]
+            else:
+                search_docs = self.documents
+            
+            if not search_docs:
+                return []
+            
+            # Use TF-IDF search if available
+            if self.vectorizer and self.tfidf_matrix is not None:
+                return self._tfidf_search(query, search_docs, top_k)
+            else:
+                return self._keyword_search(query, search_docs, top_k)
+                
+        except Exception as e:
+            rprint(f"❌ Search error: {e}")
+            return []
+    
+    def _tfidf_search(self, query: str, search_docs: Dict, top_k: int):
+        """TF-IDF based search"""
+        try:
+            # Transform query
+            query_vector = self.vectorizer.transform([query])
+            
+            # Calculate similarities
+            similarities = self.cosine_similarity(query_vector, self.tfidf_matrix)[0]
+            
+            # Get top results
+            results = []
+            for idx, similarity in enumerate(similarities):
+                if similarity > 0:
+                    doc_id = self.document_ids[idx]
+                    if doc_id in search_docs:
+                        doc_data = search_docs[doc_id]
                         results.append({
-                            'document_id': doc_id,
-                            'content': chunks[best_idx],
-                            'score': best_score,
+                            'doc_id': doc_id,
+                            'content': doc_data['content'][:500],  # First 500 chars
+                            'score': float(similarity),
                             'metadata': doc_data['metadata']
                         })
             
-            return sorted(results, key=lambda x: x['score'], reverse=True)[:limit]
-        
+            # Sort by score and return top_k
+            results.sort(key=lambda x: x['score'], reverse=True)
+            return results[:top_k]
+            
         except Exception as e:
-            rprint(f"⚠️ Embedding search failed: {e}")
-            return self._keyword_search(query, candidate_docs, limit)
+            rprint(f"❌ TF-IDF search error: {e}")
+            return []
     
-    def _tfidf_search(self, query: str, candidate_docs: Dict, limit: int) -> List[Dict[str, Any]]:
-        """TF-IDF based search"""
+    def _keyword_search(self, query: str, search_docs: Dict, top_k: int):
+        """Simple keyword-based search"""
         try:
-            all_chunks = []
-            chunk_doc_mapping = []
-            
-            for doc_id, doc_data in candidate_docs.items():
-                for chunk in doc_data['chunks']:
-                    all_chunks.append(chunk)
-                    chunk_doc_mapping.append(doc_id)
-            
-            if not all_chunks:
-                return []
-            
-            # Fit TF-IDF
-            tfidf_matrix = self.vectorizer.fit_transform(all_chunks + [query])
-            query_vector = tfidf_matrix[-1]
-            chunk_vectors = tfidf_matrix[:-1]
-            
-            # Calculate similarities
-            similarities = self.cosine_similarity(query_vector, chunk_vectors).flatten()
-            
-            # Get top results
-            top_indices = similarities.argsort()[-limit:][::-1]
-            
             results = []
-            for idx in top_indices:
-                if similarities[idx] > 0.1:
-                    doc_id = chunk_doc_mapping[idx]
-                    results.append({
-                        'document_id': doc_id,
-                        'content': all_chunks[idx],
-                        'score': float(similarities[idx]),
-                        'metadata': candidate_docs[doc_id]['metadata']
-                    })
+            query_lower = query.lower()
+            query_words = query_lower.split()
             
-            return results
-        
-        except Exception as e:
-            rprint(f"⚠️ TF-IDF search failed: {e}")
-            return self._keyword_search(query, candidate_docs, limit)
-    
-    def _keyword_search(self, query: str, candidate_docs: Dict, limit: int) -> List[Dict[str, Any]]:
-        """Fallback keyword search"""
-        query_words = set(query.lower().split())
-        results = []
-        
-        for doc_id, doc_data in candidate_docs.items():
-            for chunk in doc_data['chunks']:
-                chunk_words = set(chunk.lower().split())
-                score = len(query_words.intersection(chunk_words)) / len(query_words)
+            for doc_id, doc_data in search_docs.items():
+                content = doc_data['content'].lower()
                 
-                if score > 0:
+                # Count keyword matches
+                matches = 0
+                for word in query_words:
+                    matches += content.count(word)
+                
+                if matches > 0:
+                    # Simple scoring based on matches
+                    score = matches / len(query_words)
+                    
                     results.append({
-                        'document_id': doc_id,
-                        'content': chunk,
+                        'doc_id': doc_id,
+                        'content': doc_data['content'][:500],  # First 500 chars
                         'score': score,
                         'metadata': doc_data['metadata']
                     })
-        
-        return sorted(results, key=lambda x: x['score'], reverse=True)[:limit]
+            
+            # Sort by score and return top_k
+            results.sort(key=lambda x: x['score'], reverse=True)
+            return results[:top_k]
+            
+        except Exception as e:
+            rprint(f"❌ Keyword search error: {e}")
+            return []
 
-# === MODERNE AI CHAT ===
+# === AI CHAT SYSTEM ===
 class ModernAIChat:
-    """Moderne AI Chat mit Google AI"""
+    """AI Chat mit Google Gemini"""
     
     def __init__(self):
-        self.enabled = False
-        
-        if features.google_ai:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.google_api_key)
-                self.model = genai.GenerativeModel('gemini-1.5-pro')
-                self.enabled = True
-                rprint("✅ Google AI configured successfully")
-            except Exception as e:
-                rprint(f"⚠️ Failed to configure Google AI: {e}")
+        self.model = None
+        self._initialize_ai()
     
-    async def generate_response(self, query: str, context: str = "", project_id: Optional[str] = None) -> str:
-        """Generate AI response"""
-        if not self.enabled:
-            return "AI chat is not available. Please configure GOOGLE_API_KEY."
+    def _initialize_ai(self):
+        """Initialize AI model"""
+        if not settings.google_api_key or settings.google_api_key.strip() == "":
+            rprint("⚠️ Google AI API key not configured")
+            return
         
         try:
-            prompt = f"""Based on the following context from documents, answer the user's question.
+            import google.generativeai as genai
+            genai.configure(api_key=settings.google_api_key)
+            
+            # Fix model name if needed
+            model_name = settings.gemini_model
+            if model_name == 'gemini-2.5-flash':
+                model_name = 'gemini-1.5-flash'
+            
+            self.model = genai.GenerativeModel(model_name)
+            rprint(f"✅ Google AI initialized with model: {model_name}")
+            
+        except ImportError:
+            rprint("❌ google-generativeai not installed")
+        except Exception as e:
+            rprint(f"❌ Failed to initialize Google AI: {e}")
+    
+    async def generate_response(self, query: str, context: str = "", project_id: str = None):
+        """Generate AI response"""
+        if not self.model:
+            return "❌ AI service not configured. Please set GOOGLE_API_KEY in .env file."
+        
+        try:
+            if context:
+                prompt = f"""Based on the following context from documents, answer the user's question:
 
 Context:
 {context}
 
 Question: {query}
 
-Please provide a helpful and accurate answer based on the context provided. If the context doesn't contain enough information to answer the question, say so."""
+Please provide a helpful answer based on the context. If the context doesn't contain relevant information, say so clearly."""
+            else:
+                prompt = query
             
             response = await asyncio.to_thread(self.model.generate_content, prompt)
             return response.text
@@ -365,7 +393,7 @@ Please provide a helpful and accurate answer based on the context provided. If t
             return f"Sorry, I encountered an error generating a response: {str(e)}"
 
 # Initialize components
-rag_system = ModernRAG()
+rag_system = SimpleRAGSystem()
 ai_chat = ModernAIChat()
 
 # === DATA MANAGEMENT ===
@@ -438,6 +466,45 @@ async def load_documents_into_rag():
     
     rprint(f"✅ Loaded {loaded_count} documents into RAG system")
 
+# === SIMPLE DOCUMENT PROCESSING ===
+async def process_document(file_path: Path, content_type: str = None) -> str:
+    """Simple document text extraction"""
+    try:
+        text = ""
+        file_extension = file_path.suffix.lower()
+        
+        if file_extension == '.txt':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+        elif file_extension == '.md':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+        elif file_extension == '.pdf' and features.pypdf:
+            try:
+                import pypdf
+                with open(file_path, 'rb') as f:
+                    reader = pypdf.PdfReader(f)
+                    text = "\n".join([page.extract_text() for page in reader.pages])
+            except Exception as e:
+                rprint(f"⚠️ PDF extraction failed: {e}")
+                text = f"PDF file: {file_path.name} (extraction failed)"
+        elif file_extension in ['.docx', '.doc'] and features.docx:
+            try:
+                import docx
+                doc = docx.Document(file_path)
+                text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+            except Exception as e:
+                rprint(f"⚠️ DOCX extraction failed: {e}")
+                text = f"Word document: {file_path.name} (extraction failed)"
+        else:
+            text = f"File: {file_path.name} (text extraction not supported for {file_extension})"
+        
+        return text
+    
+    except Exception as e:
+        rprint(f"❌ Document processing failed: {e}")
+        return f"File: {file_path.name} (processing failed: {str(e)})"
+
 # === LIFESPAN MANAGEMENT ===
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -489,6 +556,34 @@ async def health_check():
         "version": settings.app_version,
         "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         "features": features.summary()
+    }
+
+@app.get("/api/config")
+async def get_configuration():
+    """Get backend configuration information"""
+    return {
+        "google_api_configured": bool(settings.google_api_key and settings.google_api_key.strip()),
+        "upload_dir": str(settings.upload_dir),
+        "data_dir": str(settings.data_dir),
+        "chunk_size": settings.chunk_size,
+        "chunk_overlap": settings.chunk_overlap,
+        "max_file_size": settings.max_file_size,
+        "top_k": settings.top_k,
+        "features": features.summary()
+    }
+
+@app.get("/api/ai/info")
+async def get_ai_info():
+    """Get AI model information"""
+    if not settings.google_api_key or settings.google_api_key.strip() == "":
+        raise HTTPException(status_code=503, detail="Google AI API key not configured")
+    
+    return {
+        "model": settings.gemini_model,
+        "provider": "Google AI",
+        "features": ["chat", "text_generation", "rag_search"],
+        "status": "available" if settings.google_api_key else "unavailable",
+        "api_configured": bool(settings.google_api_key and settings.google_api_key.strip())
     }
 
 @app.get("/api/system/info")
@@ -558,6 +653,260 @@ async def create_project(project: ProjectCreate):
         document_count=0
     )
 
+# === FILE UPLOAD ENDPOINT ===
+@app.post("/api/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    project_name: str = Form(...)
+):
+    """Upload and process file"""
+    try:
+        # Check file size
+        if file.size and file.size > settings.max_file_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Max size: {settings.max_file_size / (1024*1024):.1f}MB"
+            )
+        
+        # Check file type
+        file_extension = Path(file.filename).suffix.lower()
+        allowed_extensions = ['.pdf', '.docx', '.doc', '.txt', '.md']
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type {file_extension} not supported. Allowed: {', '.join(allowed_extensions)}"
+            )
+        
+        # Create project if it doesn't exist
+        project_id = None
+        for pid, pdata in projects_db.items():
+            if pdata["name"] == project_name:
+                project_id = pid
+                break
+        
+        if not project_id:
+            project_id = str(uuid.uuid4())
+            projects_db[project_id] = {
+                "name": project_name,
+                "description": f"Project created via file upload: {file.filename}",
+                "created_at": datetime.utcnow().isoformat()
+            }
+        
+        # Save file
+        upload_dir = Path(settings.upload_dir)
+        upload_dir.mkdir(exist_ok=True)
+        
+        file_id = str(uuid.uuid4())
+        file_path = upload_dir / f"{file_id}_{file.filename}"
+        
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        # Extract text
+        extracted_text = await process_document(file_path, file.content_type)
+        
+        # Store document
+        doc_data = {
+            "filename": file.filename,
+            "file_path": str(file_path),
+            "file_size": len(content),
+            "file_type": file_extension,
+            "project_ids": [project_id],
+            "extracted_text": extracted_text,
+            "processing_status": "completed",
+            "created_at": datetime.utcnow().isoformat(),
+            "metadata": {
+                "original_filename": file.filename,
+                "upload_timestamp": datetime.utcnow().isoformat(),
+                "project_name": project_name
+            }
+        }
+        
+        documents_db[file_id] = doc_data
+        
+        # Add to RAG system
+        rag_system.add_document(
+            doc_id=file_id,
+            content=extracted_text,
+            metadata=doc_data["metadata"],
+            project_ids=[project_id]
+        )
+        
+        await save_data()
+        
+        return {
+            "success": True,
+            "file_id": file_id,
+            "project_id": project_id,
+            "filename": file.filename,
+            "text_length": len(extracted_text),
+            "message": "File uploaded and processed successfully"
+        }
+        
+    except Exception as e:
+        rprint(f"❌ Upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+# === SEARCH ENDPOINT ===
+@app.post("/api/search")
+async def search_documents(request: dict):
+    """Search documents using RAG"""
+    try:
+        query = request.get("query", "")
+        project_id = request.get("project_id")
+        top_k = request.get("top_k", settings.top_k)
+        
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+        
+        # Perform search
+        search_results = rag_system.search(
+            query=query,
+            top_k=top_k,
+            project_ids=[project_id] if project_id else None
+        )
+        
+        # Format results
+        formatted_results = []
+        for result in search_results:
+            doc_data = documents_db.get(result['doc_id'], {})
+            formatted_results.append({
+                "id": result['doc_id'],
+                "content": result['content'],
+                "score": result['score'],
+                "metadata": result['metadata'],
+                "filename": doc_data.get("filename", "Unknown"),
+                "project_id": project_id
+            })
+        
+        return {
+            "query": query,
+            "results": formatted_results,
+            "total_found": len(formatted_results),
+            "search_params": {
+                "top_k": top_k,
+                "project_id": project_id
+            }
+        }
+        
+    except Exception as e:
+        rprint(f"❌ Search error: {e}")
+        return {
+            "query": request.get("query", ""),
+            "results": [],
+            "total_found": 0,
+            "error": str(e),
+            "message": "Search temporarily unavailable"
+        }
+
+# === CHAT ENDPOINT ===
+@app.post("/api/chat")
+async def chat_with_ai(request: dict):
+    """Enhanced chat endpoint with RAG integration"""
+    try:
+        message = request.get("message", "")
+        project_id = request.get("project_id")
+        
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+        
+        # Check if Google AI is configured
+        if not settings.google_api_key or settings.google_api_key.strip() == "":
+            return {
+                "response": "❌ AI service not configured. Please set GOOGLE_API_KEY in the .env file.",
+                "error": "AI_SERVICE_UNAVAILABLE",
+                "chat_id": str(uuid.uuid4()),
+                "timestamp": datetime.utcnow().isoformat(),
+                "sources": []
+            }
+        
+        # Get context from RAG if project_id provided
+        context = ""
+        sources = []
+        
+        if project_id:
+            try:
+                search_results = rag_system.search(
+                    query=message,
+                    top_k=3,
+                    project_ids=[project_id]
+                )
+                
+                if search_results:
+                    context = "\n\n".join([
+                        f"Document: {result['metadata'].get('original_filename', 'Unknown')}\n{result['content']}"
+                        for result in search_results
+                    ])
+                    
+                    sources = [{
+                        "id": result['doc_id'],
+                        "name": result['metadata'].get('original_filename', 'Unknown'),
+                        "excerpt": result['content'][:200] + "..." if len(result['content']) > 200 else result['content'],
+                        "relevance_score": result['score']
+                    } for result in search_results]
+            except Exception as e:
+                rprint(f"⚠️ RAG search failed: {e}")
+        
+        # Generate AI response
+        ai_response = await ai_chat.generate_response(
+            query=message,
+            context=context,
+            project_id=project_id
+        )
+        
+        # Ensure response is not empty
+        if not ai_response or len(ai_response.strip()) < 5:
+            ai_response = "I received your message but couldn't generate a proper response. Please try rephrasing your question."
+        
+        # Save chat
+        chat_id = str(uuid.uuid4())
+        chat_data = {
+            "project_id": project_id,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": message,
+                    "timestamp": datetime.utcnow().isoformat()
+                },
+                {
+                    "role": "assistant", 
+                    "content": ai_response,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            ],
+            "sources": sources,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        chats_db[chat_id] = chat_data
+        await save_data()
+        
+        return {
+            "response": ai_response,
+            "chat_id": chat_id,
+            "project_id": project_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "sources": sources,
+            "model_info": {
+                "model": settings.gemini_model,
+                "provider": "Google AI"
+            }
+        }
+        
+    except Exception as e:
+        error_msg = f"Sorry, I encountered an error: {str(e)}"
+        rprint(f"❌ Chat error: {e}")
+        
+        return {
+            "response": error_msg,
+            "error": "GENERATION_ERROR", 
+            "chat_id": str(uuid.uuid4()),
+            "timestamp": datetime.utcnow().isoformat(),
+            "sources": []
+        }
+
 # === DOCUMENT ENDPOINTS ===
 @app.post("/api/documents/upload")
 async def upload_document(
@@ -615,358 +964,187 @@ async def upload_document(
         return {
             "document_id": file_id,
             "filename": file.filename,
-            "status": doc_data["processing_status"],
-            "message": "Document uploaded and processed successfully" if extracted_text else "Document uploaded but processing failed",
-            "extracted_length": len(extracted_text) if extracted_text else 0
+            "status": "completed" if extracted_text else "failed",
+            "text_length": len(extracted_text) if extracted_text else 0
         }
         
     except Exception as e:
         rprint(f"❌ Document upload failed: {e}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-async def process_document(file_path: Path, content_type: str) -> str:
-    """Extract text from document using modern libraries"""
-    try:
-        if content_type == "text/plain":
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
-        
-        elif content_type == "application/pdf" and features.pypdf:
-            try:
-                from pypdf import PdfReader
-                reader = PdfReader(file_path)
-                text = ""
-                for page in reader.pages:
-                    text += page.extract_text() + "\n"
-                return text
-            except Exception as e:
-                rprint(f"⚠️ PDF processing failed: {e}")
-                return ""
-        
-        elif "wordprocessingml.document" in (content_type or "") and features.docx:
-            try:
-                from docx import Document
-                doc = Document(file_path)
-                text = ""
-                for paragraph in doc.paragraphs:
-                    text += paragraph.text + "\n"
-                return text
-            except Exception as e:
-                rprint(f"⚠️ DOCX processing failed: {e}")
-                return ""
-        
-        else:
-            # Try to read as text
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
+@app.get("/api/documents", response_model=List[DocumentResponse])
+async def get_documents(project_id: Optional[str] = None):
+    """Get documents, optionally filtered by project"""
+    documents = []
     
-    except Exception as e:
-        rprint(f"❌ Document processing failed: {e}")
-        return ""
-
-
-# === KONFIGURATION ENDPOINT ===
-@app.get("/api/config")
-async def get_configuration():
-    """Get backend configuration information"""
-    return {
-        "google_api_configured": bool(settings.google_api_key),
-        "upload_dir": str(settings.upload_dir),
-        "data_dir": str(settings.data_dir),
-        "chunk_size": settings.chunk_size,
-        "chunk_overlap": settings.chunk_overlap,
-        "max_file_size": settings.max_file_size,
-        "top_k": settings.top_k,
-        "features": {
-            "google_ai": bool(settings.google_api_key),
-            "rag_search": True,
-            "file_upload": True,
-            "chat": True
-        }
-    }
-
-# === AI INFO ENDPOINT ===
-@app.get("/api/ai/info")
-async def get_ai_info():
-    """Get AI model information"""
-    if not settings.google_api_key:
-        raise HTTPException(status_code=503, detail="Google AI API key not configured")
-    
-    return {
-        "model": getattr(settings, 'gemini_model', 'gemini-1.5-flash'),
-        "provider": "Google AI",
-        "features": ["chat", "text_generation", "rag_search"],
-        "status": "available" if settings.google_api_key else "unavailable",
-        "api_configured": bool(settings.google_api_key)
-    }
-
-# === FILE UPLOAD ENDPOINT ===
-@app.post("/api/upload")
-async def upload_file(
-    file: UploadFile = File(...),
-    project_name: str = Form(...)
-):
-    """Upload and process file"""
-    try:
-        # Check file size
-        if file.size and file.size > settings.max_file_size:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File too large. Max size: {settings.max_file_size / (1024*1024):.1f}MB"
-            )
-        
-        # Check file type
-        file_extension = Path(file.filename).suffix.lower()
-        allowed_extensions = ['.pdf', '.docx', '.doc', '.txt', '.md']
-        
-        if file_extension not in allowed_extensions:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File type {file_extension} not supported. Allowed: {', '.join(allowed_extensions)}"
-            )
-        
-        # Create project if it doesn't exist
-        project_id = None
-        for pid, pdata in projects_db.items():
-            if pdata["name"] == project_name:
-                project_id = pid
-                break
-        
-        if not project_id:
-            project_id = str(uuid.uuid4())
-            projects_db[project_id] = {
-                "name": project_name,
-                "description": f"Project created via file upload: {file.filename}",
-                "created_at": datetime.utcnow().isoformat()
-            }
-        
-        # Save file
-        upload_dir = Path(settings.upload_dir)
-        upload_dir.mkdir(exist_ok=True)
-        
-        file_id = str(uuid.uuid4())
-        file_path = upload_dir / f"{file_id}_{file.filename}"
-        
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        
-        # Extract text (simplified - you might want to use your existing text extraction)
-        extracted_text = ""
-        if file_extension == '.txt':
-            extracted_text = content.decode('utf-8', errors='ignore')
-        elif file_extension == '.md':
-            extracted_text = content.decode('utf-8', errors='ignore')
-        else:
-            # For other formats, you'd need more sophisticated extraction
-            extracted_text = f"File uploaded: {file.filename} (extraction not implemented for {file_extension})"
-        
-        # Store document
-        doc_data = {
-            "filename": file.filename,
-            "file_path": str(file_path),
-            "file_size": len(content),
-            "file_type": file_extension,
-            "project_ids": [project_id],
-            "extracted_text": extracted_text,
-            "processing_status": "completed",
-            "created_at": datetime.utcnow().isoformat(),
-            "metadata": {
-                "original_filename": file.filename,
-                "upload_timestamp": datetime.utcnow().isoformat(),
-                "project_name": project_name
-            }
-        }
-        
-        documents_db[file_id] = doc_data
-        
-        # Add to RAG system
-        rag_system.add_document(
-            doc_id=file_id,
-            content=extracted_text,
-            metadata=doc_data["metadata"],
-            project_ids=[project_id]
-        )
-        
-        await save_data()
-        
-        return {
-            "success": True,
-            "file_id": file_id,
-            "project_id": project_id,
-            "filename": file.filename,
-            "text_length": len(extracted_text),
-            "message": "File uploaded and processed successfully"
-        }
-        
-    except Exception as e:
-        rprint(f"❌ Upload error: {e}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
-
-# === RAG SEARCH ENDPOINT ===
-@app.post("/api/search")
-async def search_documents(request: dict):
-    """Search documents using RAG"""
-    try:
-        query = request.get("query", "")
-        project_id = request.get("project_id")
-        top_k = request.get("top_k", settings.top_k)
-        
-        if not query:
-            raise HTTPException(status_code=400, detail="Query is required")
-        
-        # Perform search
-        results = rag_system.search(
-            query=query,
-            top_k=top_k,
-            project_ids=[project_id] if project_id else None
-        )
-        
-        # Format results
-        formatted_results = []
-        for result in results:
-            doc_data = documents_db.get(result.doc_id, {})
-            formatted_results.append({
-                "id": result.doc_id,
-                "content": result.content,
-                "score": result.score,
-                "metadata": result.metadata,
-                "filename": doc_data.get("filename", "Unknown"),
-                "project_id": project_id
-            })
-        
-        return {
-            "query": query,
-            "results": formatted_results,
-            "total_found": len(formatted_results),
-            "search_params": {
-                "top_k": top_k,
-                "project_id": project_id
-            }
-        }
-        
-    except Exception as e:
-        rprint(f"❌ Search error: {e}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
-
-# === CHAT ENDPOINTS ===
-# === CHAT ENDPOINT VERBESSERUNG ===
-# Das existierende Chat-Endpoint sollte auch verbessert werden für bessere Fehlerbehandlung
-
-@app.post("/api/chat")
-async def chat_with_ai(request: dict):
-    """Enhanced chat endpoint with better error handling"""
-    try:
-        message = request.get("message", "")
-        project_id = request.get("project_id")
-        
-        if not message:
-            raise HTTPException(status_code=400, detail="Message is required")
-        
-        # Check if Google AI is configured
-        if not settings.google_api_key:
-            return {
-                "response": "Sorry, the AI service is not properly configured. Please set the GOOGLE_API_KEY environment variable.",
-                "error": "AI_SERVICE_UNAVAILABLE",
-                "chat_id": str(uuid.uuid4()),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        
-        # Import Google AI
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=settings.google_api_key)
-            model = genai.GenerativeModel(getattr(settings, 'gemini_model', 'gemini-1.5-flash'))
-        except ImportError:
-            raise HTTPException(status_code=503, detail="Google AI library not available")
-        except Exception as e:
-            raise HTTPException(status_code=503, detail=f"AI service error: {str(e)}")
-        
-        # Get context from RAG if project_id provided
-        context = ""
-        sources = []
-        
-        if project_id:
-            search_results = rag_system.search(
-                query=message,
-                top_k=3,
-                project_ids=[project_id]
-            )
+    for doc_id, doc_data in documents_db.items():
+        # Filter by project if specified
+        if project_id and project_id not in doc_data.get("project_ids", []):
+            continue
             
-            if search_results:
-                context = "\n\n".join([
-                    f"Document: {result.metadata.get('original_filename', 'Unknown')}\n{result.content}"
-                    for result in search_results
-                ])
-                
-                sources = [{
-                    "id": result.doc_id,
-                    "name": result.metadata.get('original_filename', 'Unknown'),
-                    "excerpt": result.content[:200] + "..." if len(result.content) > 200 else result.content,
-                    "relevance_score": result.score
-                } for result in search_results]
-        
-        # Prepare prompt
-        if context:
-            prompt = f"""Based on the following context from the user's documents, please answer their question:
+        documents.append(DocumentResponse(
+            id=doc_id,
+            filename=doc_data["filename"],
+            file_size=doc_data["file_size"],
+            file_type=doc_data["file_type"],
+            processing_status=doc_data["processing_status"],
+            created_at=datetime.fromisoformat(doc_data["created_at"]) 
+                      if isinstance(doc_data["created_at"], str) 
+                      else doc_data["created_at"],
+            project_ids=doc_data.get("project_ids", [])
+        ))
+    
+    return documents
 
-Context:
-{context}
-
-Question: {message}
-
-Please provide a helpful answer based on the context. If the context doesn't contain relevant information, please say so clearly."""
-        else:
-            prompt = message
+@app.delete("/api/documents/{document_id}")
+async def delete_document(document_id: str):
+    """Delete document"""
+    if document_id not in documents_db:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    try:
+        # Remove from RAG system
+        if document_id in rag_system.documents:
+            del rag_system.documents[document_id]
+            rag_system._update_search_index()
         
-        # Generate response
-        response = model.generate_content(prompt)
-        ai_response = response.text
+        # Remove file
+        doc_data = documents_db[document_id]
+        file_path = Path(doc_data["file_path"])
+        if file_path.exists():
+            file_path.unlink()
         
-        # Save chat
-        chat_id = str(uuid.uuid4())
-        chat_data = {
-            "project_id": project_id,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": message,
-                    "timestamp": datetime.utcnow().isoformat()
-                },
-                {
-                    "role": "assistant", 
-                    "content": ai_response,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            ],
-            "sources": sources,
-            "created_at": datetime.utcnow().isoformat()
-        }
-        
-        chats_db[chat_id] = chat_data
+        # Remove from database
+        del documents_db[document_id]
         await save_data()
         
+        return {"message": "Document deleted successfully"}
+        
+    except Exception as e:
+        rprint(f"❌ Document deletion failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Deletion failed: {str(e)}")
+
+# === CHAT HISTORY ENDPOINTS ===
+@app.get("/api/chats")
+async def get_chats(project_id: Optional[str] = None):
+    """Get chat history"""
+    chats = []
+    
+    for chat_id, chat_data in chats_db.items():
+        # Filter by project if specified
+        if project_id and chat_data.get("project_id") != project_id:
+            continue
+            
+        chats.append({
+            "id": chat_id,
+            "project_id": chat_data.get("project_id"),
+            "created_at": chat_data["created_at"],
+            "message_count": len(chat_data.get("messages", [])),
+            "last_message": chat_data.get("messages", [])[-1]["content"][:100] + "..." 
+                           if chat_data.get("messages") else ""
+        })
+    
+    # Sort by creation time
+    chats.sort(key=lambda x: x["created_at"], reverse=True)
+    return chats
+
+@app.get("/api/chats/{chat_id}")
+async def get_chat(chat_id: str):
+    """Get specific chat"""
+    if chat_id not in chats_db:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    return chats_db[chat_id]
+
+@app.delete("/api/chats/{chat_id}")
+async def delete_chat(chat_id: str):
+    """Delete chat"""
+    if chat_id not in chats_db:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    del chats_db[chat_id]
+    await save_data()
+    
+    return {"message": "Chat deleted successfully"}
+
+# === ADMIN ENDPOINTS ===
+@app.get("/api/admin/stats")
+async def get_admin_stats():
+    """Get system statistics for admin"""
+    return {
+        "projects": {
+            "total": len(projects_db),
+            "projects": [
+                {
+                    "id": pid,
+                    "name": pdata["name"],
+                    "document_count": sum(1 for doc in documents_db.values() 
+                                        if pid in doc.get("project_ids", [])),
+                    "created_at": pdata["created_at"]
+                }
+                for pid, pdata in projects_db.items()
+            ]
+        },
+        "documents": {
+            "total": len(documents_db),
+            "by_status": {
+                "completed": sum(1 for doc in documents_db.values() 
+                               if doc.get("processing_status") == "completed"),
+                "failed": sum(1 for doc in documents_db.values() 
+                            if doc.get("processing_status") == "failed"),
+                "pending": sum(1 for doc in documents_db.values() 
+                             if doc.get("processing_status") == "pending")
+            },
+            "total_size": sum(doc.get("file_size", 0) for doc in documents_db.values())
+        },
+        "chats": {
+            "total": len(chats_db),
+            "total_messages": sum(len(chat.get("messages", [])) for chat in chats_db.values())
+        },
+        "rag": {
+            "indexed_documents": len(rag_system.documents),
+            "search_method": "TF-IDF" if rag_system.vectorizer else "Keyword-based"
+        },
+        "features": features.summary()
+    }
+
+@app.post("/api/admin/reindex")
+async def reindex_documents():
+    """Reindex all documents in RAG system"""
+    try:
+        # Clear current index
+        rag_system.documents.clear()
+        rag_system.project_docs.clear()
+        
+        # Reload all documents
+        await load_documents_into_rag()
+        
         return {
-            "response": ai_response,
-            "chat_id": chat_id,
-            "project_id": project_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "sources": sources,
-            "model_info": {
-                "model": getattr(settings, 'gemini_model', 'gemini-1.5-flash'),
-                "provider": "Google AI"
-            }
+            "message": "Documents reindexed successfully",
+            "indexed_count": len(rag_system.documents)
         }
         
     except Exception as e:
-        error_msg = f"Sorry, I encountered an error generating a response: {str(e)}"
-        rprint(f"❌ Chat error: {e}")
-        
-        # Return error but don't raise HTTP exception for better UX
-        return {
-            "response": error_msg,
-            "error": "GENERATION_ERROR", 
-            "chat_id": str(uuid.uuid4()),
-            "timestamp": datetime.utcnow().isoformat(),
-            "sources": []
-        }
+        rprint(f"❌ Reindexing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Reindexing failed: {str(e)}")
+
+# === ERROR HANDLERS ===
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Global exception handler"""
+    rprint(f"❌ Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": str(exc)}
+    )
+
+# === MAIN EXECUTION ===
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
+        log_level="info"
+    )
