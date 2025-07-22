@@ -1,4 +1,4 @@
-// frontend/components/chat/ChatInterface.tsx
+// frontend/components/chat/ChatInterface.tsx - An neue API angepasst
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
@@ -22,24 +22,10 @@ import {
   Zap
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { ChatAPI, ProjectAPI, handleAPIError, withErrorHandling, testAPIConnection } from '@/lib/api'
+import { ApiService } from '@/services/api'
+import { useChat } from '@/hooks/useChat'
 
-// Enhanced Types
-interface ChatMessage {
-  id: string
-  content: string
-  role: 'user' | 'assistant' | 'error'
-  timestamp: string
-  sources?: Array<{
-    document_id: string
-    content: string
-    score: number
-    metadata: Record<string, any>
-  }>
-  status?: 'sending' | 'sent' | 'error'
-  error?: string
-}
-
+// Types
 interface Project {
   id: string
   name: string
@@ -55,24 +41,30 @@ interface ChatStats {
 
 export const ChatInterface: React.FC = () => {
   // State Management
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
   const [stats, setStats] = useState<ChatStats>({
     totalMessages: 0,
     responseTime: 0,
     lastActivity: ''
   })
 
+  // Use enhanced chat hook
+  const {
+    messages,
+    isLoading,
+    connectionStatus,
+    sendMessage,
+    clearChat,
+    testConnection,
+    testAI
+  } = useChat(selectedProjectId || undefined)
+
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const startTimeRef = useRef<number>(0)
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -83,45 +75,40 @@ export const ChatInterface: React.FC = () => {
     scrollToBottom()
   }, [messages, scrollToBottom])
 
-  // Load projects and test connection on mount
+  // Load projects on mount
   useEffect(() => {
     initializeChat()
   }, [])
 
   const initializeChat = async () => {
     console.log('🚀 Initializing chat interface...')
+    console.log('🧪 Starting API connectivity test...')
     
-    // Test API connection first
-    setConnectionStatus('checking')
     try {
-      const testResults = await testAPIConnection()
+      // Test connection using ApiService
+      const healthCheck = await ApiService.healthCheck()
       
-      if (testResults.health) {
-        setConnectionStatus('connected')
+      if (healthCheck.status === 'healthy') {
         console.log('✅ Backend connection established')
         
-        // Load projects if available
-        if (testResults.projects) {
-          const projectsData = testResults.details.projects as Project[]
-          setProjects(projectsData)
-          console.log(`📁 Loaded ${projectsData.length} projects`)
-          
-          // Auto-select first project if available
-          if (projectsData.length > 0) {
-            setSelectedProjectId(projectsData[0].id)
-            console.log(`🎯 Auto-selected project: ${projectsData[0].name}`)
-          }
+        // Load projects
+        const projectsResponse = await ApiService.getProjects()
+        const projectsData = projectsResponse.projects || []
+        
+        setProjects(projectsData)
+        console.log(`📁 Loaded ${projectsData.length} projects`)
+        
+        // Auto-select first project if available
+        if (projectsData.length > 0) {
+          setSelectedProjectId(projectsData[0].id)
+          console.log(`🎯 Auto-selected project: ${projectsData[0].name}`)
         }
         
-        // Show connection status
         toast.success('Connected to RagFlow backend!', { duration: 2000 })
       } else {
-        setConnectionStatus('disconnected')
-        console.warn('❌ Backend connection failed')
-        toast.error('Backend connection failed. Please check if the server is running.')
+        throw new Error('Backend unhealthy')
       }
     } catch (error) {
-      setConnectionStatus('disconnected')
       console.error('💥 Initialization failed:', error)
       toast.error('Failed to initialize chat. Please refresh the page.')
     }
@@ -139,88 +126,28 @@ export const ChatInterface: React.FC = () => {
     }
   }
 
-  // Clear all messages
-  const clearMessages = () => {
-    setMessages([])
-    setStats(prev => ({ ...prev, totalMessages: 0 }))
-    toast.success('Chat cleared!', { duration: 1500 })
-  }
-
-  // Send message function
-  const sendMessage = async () => {
+  // Handle message sending
+  const handleSendMessage = async () => {
     const messageContent = input.trim()
     if (!messageContent || isLoading || connectionStatus === 'disconnected') return
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      content: messageContent,
-      role: 'user',
-      timestamp: new Date().toISOString()
-    }
-
-    // Add user message and clear input
-    setMessages(prev => [...prev, userMessage])
+    // Use the chat hook's sendMessage function
+    await sendMessage(messageContent)
+    
+    // Clear input and update stats
     setInput('')
-    setIsLoading(true)
-    startTimeRef.current = Date.now()
-
-    try {
-      const response = await ChatAPI.sendMessage({
-        message: messageContent,
-        project_id: selectedProjectId
-      })
-
-      if (response.success && response.data) {
-        const responseTime = Date.now() - startTimeRef.current
-        
-        const assistantMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          content: response.data.response || 'Sorry, I could not process your request.',
-          role: 'assistant',
-          timestamp: new Date().toISOString(),
-          sources: response.data.sources || [],
-          status: 'sent'
-        }
-
-        setMessages(prev => [...prev, assistantMessage])
-        setStats(prev => ({
-          totalMessages: prev.totalMessages + 2,
-          responseTime,
-          lastActivity: new Date().toISOString()
-        }))
-
-        // Show success indicators
-        if (response.data.sources && response.data.sources.length > 0) {
-          toast.success(`Found ${response.data.sources.length} relevant sources`, { duration: 2000 })
-        }
-
-      } else {
-        throw new Error(response.error || 'Unknown error occurred')
-      }
-
-    } catch (error) {
-      console.error('Chat error:', error)
-      
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: error instanceof Error ? error.message : 'Failed to send message. Please try again.',
-        role: 'error',
-        timestamp: new Date().toISOString(),
-        status: 'error'
-      }
-
-      setMessages(prev => [...prev, errorMessage])
-      toast.error('Failed to send message')
-    } finally {
-      setIsLoading(false)
-    }
+    setStats(prev => ({
+      ...prev,
+      totalMessages: prev.totalMessages + 1,
+      lastActivity: new Date().toISOString()
+    }))
   }
 
   // Handle Enter key in textarea
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      handleSendMessage()
     }
   }
 
@@ -238,11 +165,79 @@ export const ChatInterface: React.FC = () => {
     }
   }
 
+  // Project selector
+  const ProjectSelector = () => (
+    <div className="bg-white border-b border-gray-200 p-4">
+      <div className="flex items-center justify-between max-w-4xl mx-auto">
+        <div className="flex items-center gap-3">
+          <Database className="w-5 h-5 text-blue-600" />
+          <div>
+            <h3 className="font-medium text-gray-900">Select Project</h3>
+            <p className="text-sm text-gray-600">Choose a project to chat with its documents</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          {/* Project Selection */}
+          <select
+            value={selectedProjectId || ''}
+            onChange={(e) => setSelectedProjectId(e.target.value || null)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+          >
+            <option value="">General Chat (No Project)</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name} ({project.document_count} docs)
+              </option>
+            ))}
+          </select>
+
+          {/* Connection Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={testConnection}
+              className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
+              title="Test Connection"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            
+            <button
+              onClick={clearChat}
+              className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
+              title="Clear Chat"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+
+            {/* Connection Status */}
+            <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+              connectionStatus === 'connected' 
+                ? 'bg-green-100 text-green-700' 
+                : connectionStatus === 'disconnected'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-yellow-100 text-yellow-700'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' 
+                  ? 'bg-green-500' 
+                  : connectionStatus === 'disconnected'
+                  ? 'bg-red-500'
+                  : 'bg-yellow-500'
+              }`} />
+              {connectionStatus === 'connected' ? 'Connected' : 
+               connectionStatus === 'disconnected' ? 'Disconnected' : 'Checking...'}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
   // Message Component
-  const MessageComponent: React.FC<{ message: ChatMessage }> = ({ message }) => {
+  const MessageComponent: React.FC<{ message: any }> = ({ message }) => {
     const isUser = message.role === 'user'
     const isError = message.role === 'error'
-    const isSending = message.status === 'sending'
 
     return (
       <motion.div
@@ -257,35 +252,27 @@ export const ChatInterface: React.FC = () => {
         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0 ${
           isUser ? 'bg-blue-500' : isError ? 'bg-red-500' : 'bg-gray-700'
         }`}>
-          {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+          {isUser ? <User className="w-4 h-4" /> : isError ? <AlertCircle className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
         </div>
 
         {/* Content */}
         <div className="flex-1 space-y-2 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm text-gray-900">
-              {isUser ? 'You' : 'Assistant'}
+              {isUser ? 'You' : isError ? 'Error' : 'Assistant'}
             </span>
             <span className="text-xs text-gray-500">
               {new Date(message.timestamp).toLocaleTimeString()}
             </span>
-            {isSending && (
-              <div className="flex items-center gap-1 text-xs text-blue-600">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Thinking...
-              </div>
-            )}
-            {isError && (
-              <div className="flex items-center gap-1 text-xs text-red-600">
-                <AlertCircle className="w-3 h-3" />
-                Error
-              </div>
-            )}
           </div>
 
           {/* Message Content */}
           <div className="prose prose-sm max-w-none">
-            <p className="text-gray-800 whitespace-pre-wrap break-words">{message.content}</p>
+            <p className={`whitespace-pre-wrap break-words ${
+              isError ? 'text-red-800' : 'text-gray-800'
+            }`}>
+              {message.content}
+            </p>
           </div>
 
           {/* Sources */}
@@ -293,143 +280,94 @@ export const ChatInterface: React.FC = () => {
             <div className="mt-3 space-y-2">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <FileText className="w-4 h-4" />
-                <span>Sources ({message.sources.length})</span>
+                <span>Found {message.sources.length} relevant sources</span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {message.sources.map((source, idx) => (
-                  <div key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded flex items-center gap-1">
-                    <Database className="w-3 h-3" />
-                    Document {idx + 1}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {message.sources.slice(0, 4).map((source: any, idx: number) => (
+                  <div key={idx} className="text-xs bg-blue-50 border border-blue-200 p-3 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Database className="w-3 h-3 text-blue-600" />
+                      <span className="font-medium text-blue-800">
+                        {source.filename || source.name || `Document ${idx + 1}`}
+                      </span>
+                      {source.relevance_score && (
+                        <span className="text-blue-600 bg-blue-100 px-1 rounded">
+                          {Math.round(source.relevance_score * 100)}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-700 line-clamp-2">
+                      {source.excerpt || source.content || 'Relevant content found'}
+                    </p>
                   </div>
                 ))}
               </div>
+              {message.sources.length > 4 && (
+                <p className="text-xs text-gray-600">
+                  ... and {message.sources.length - 4} more sources
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Intelligence Metadata */}
+          {message.intelligence_metadata && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+              <Sparkles className="w-3 h-3" />
+              <span>
+                {message.intelligence_metadata.query_complexity} complexity • {message.intelligence_metadata.reasoning_depth} reasoning
+              </span>
             </div>
           )}
 
           {/* Actions */}
-          {!isSending && (
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                onClick={() => copyMessage(message.id, message.content)}
-                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-              >
-                {copiedMessageId === message.id ? (
-                  <Check className="w-3 h-3" />
-                ) : (
-                  <Copy className="w-3 h-3" />
-                )}
-                {copiedMessageId === message.id ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              onClick={() => copyMessage(message.id, message.content)}
+              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+            >
+              {copiedMessageId === message.id ? (
+                <Check className="w-3 h-3" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
+              {copiedMessageId === message.id ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
         </div>
       </motion.div>
     )
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-50 relative">
-      {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900">AI Chat</h1>
-              <p className="text-sm text-gray-600">
-                {connectionStatus === 'connected' 
-                  ? `${messages.length} messages • ${selectedProjectId ? projects.find(p => p.id === selectedProjectId)?.name || 'No project' : 'No project selected'}`
-                  : 'Connecting to backend...'
-                }
-              </p>
-            </div>
-          </div>
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* Project Selector Header */}
+      <ProjectSelector />
 
-          <div className="flex items-center gap-2">
-            {/* Project Selector */}
-            {projects.length > 0 && (
-              <select
-                value={selectedProjectId || ''}
-                onChange={(e) => setSelectedProjectId(e.target.value || null)}
-                className="text-sm border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      {/* Messages Area */}
+      <div className="flex-1 overflow-hidden relative">
+        <div className="h-full overflow-y-auto pb-32" ref={messagesEndRef}>
+          <div className="max-w-4xl mx-auto p-4 space-y-4">
+            {/* Welcome Message */}
+            {messages.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center py-12"
               >
-                <option value="">No project</option>
-                {projects.map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name} ({project.document_count} docs)
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {/* Clear Messages */}
-            <button
-              onClick={clearMessages}
-              disabled={messages.length === 0}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Clear messages"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-
-            {/* Connection Status */}
-            <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-              connectionStatus === 'connected' 
-                ? 'bg-green-100 text-green-700' 
-                : connectionStatus === 'checking'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-red-100 text-red-700'
-            }`}>
-              {connectionStatus === 'connected' ? (
-                <>
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  Online
-                </>
-              ) : connectionStatus === 'checking' ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Connecting
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-3 h-3" />
-                  Offline
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Messages Area - Mit Platz für fixen Input */}
-      <div 
-        ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4"
-        style={{ paddingBottom: '200px' }} // Platz für fixen Input
-      >
-        <AnimatePresence>
-          {messages.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center justify-center text-center min-h-96"
-            >
-              <div className="max-w-md mx-auto">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="w-8 h-8 text-white" />
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
+                  <MessageSquare className="w-8 h-8 text-white" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Welcome to AI Chat
+                  Welcome to RagFlow Chat
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-600 max-w-lg mx-auto mb-6">
                   {selectedProjectId 
                     ? "Ask questions about your documents and get AI-powered answers with source references."
                     : "Select a project above to chat with your documents, or ask general questions."
                   }
                 </p>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left max-w-lg mx-auto">
                   <h4 className="font-medium text-blue-900 mb-2">💡 Tips for better results:</h4>
                   <ul className="text-sm text-blue-800 space-y-1">
                     <li>• Be specific in your questions</li>
@@ -437,19 +375,38 @@ export const ChatInterface: React.FC = () => {
                     <li>• Use follow-up questions for deeper insights</li>
                   </ul>
                 </div>
-              </div>
-            </motion.div>
-          ) : (
-            messages.map((message) => (
-              <MessageComponent key={message.id} message={message} />
-            ))
-          )}
-        </AnimatePresence>
-        <div ref={messagesEndRef} />
+              </motion.div>
+            )}
+
+            {/* Messages */}
+            <AnimatePresence>
+              {messages.map((message) => (
+                <MessageComponent key={message.id} message={message} />
+              ))}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Connection Warning */}
+        {connectionStatus === 'disconnected' && (
+          <div className="absolute top-4 left-4 right-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
+            <WifiOff className="w-5 h-5 text-red-600" />
+            <div className="flex-1">
+              <p className="text-red-800 font-medium">Backend Disconnected</p>
+              <p className="text-red-600 text-sm">Please check your connection and restart the server.</p>
+            </div>
+            <button
+              onClick={testConnection}
+              className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Input Area - Fixed nur im Chat-Bereich, nicht über die Sidebar */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg z-40">
+      {/* Input Area */}
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-3 items-end">
             {/* Text Input */}
@@ -467,7 +424,7 @@ export const ChatInterface: React.FC = () => {
                       : "Ask a question (select a project for document-specific answers)..."
                 }
                 disabled={isLoading || connectionStatus === 'disconnected'}
-                className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 pr-16 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed custom-scrollbar shadow-sm"
+                className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 pr-16 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                 rows={1}
                 style={{ minHeight: '44px', maxHeight: '120px' }}
               />
@@ -480,7 +437,7 @@ export const ChatInterface: React.FC = () => {
 
             {/* Send Button */}
             <button
-              onClick={sendMessage}
+              onClick={handleSendMessage}
               disabled={!input.trim() || input.length > 1000 || isLoading || connectionStatus === 'disconnected'}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 shadow-sm ${
                 isLoading 
@@ -528,7 +485,7 @@ export const ChatInterface: React.FC = () => {
             </div>
           </div>
 
-          {/* API Status Indicator */}
+          {/* AI Status Indicator */}
           {connectionStatus === 'connected' && (
             <div className="mt-2 flex items-center justify-center">
               <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">

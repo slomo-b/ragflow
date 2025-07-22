@@ -1,4 +1,4 @@
-// frontend/components/documents/DocumentLibrary.tsx
+// frontend/components/documents/DocumentLibrary.tsx - An neue API angepasst
 'use client'
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
@@ -49,15 +49,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { cn } from '@/lib/utils'
-import { DocumentAPI, ProjectAPI, handleAPIError, withErrorHandling, Document, Project } from '@/lib/api'
+import { cn, formatFileSize, formatDate } from '@/lib/utils'
+import ApiService from '@/services/api'
 import toast from 'react-hot-toast'
 
-// Enhanced Document Interface
+// Types
+interface Document {
+  id: string
+  filename: string
+  file_type: string
+  file_size: number
+  uploaded_at?: string  // Backend liefert uploaded_at
+  created_at?: string   // Fallback für ältere Versionen
+  processing_status: 'pending' | 'processing' | 'completed' | 'failed'
+  project_ids: string[]
+  tags: string[]
+  summary?: string
+}
+
 interface ExtendedDocument extends Document {
   uploading?: boolean
   uploadProgress?: number
-  extracted_length?: number
 }
 
 interface UploadingFile {
@@ -66,6 +78,13 @@ interface UploadingFile {
   progress: number
   status: 'uploading' | 'processing' | 'completed' | 'error'
   error?: string
+}
+
+interface Project {
+  id: string
+  name: string
+  description?: string
+  document_count: number
 }
 
 export const DocumentLibrary: React.FC = () => {
@@ -79,7 +98,7 @@ export const DocumentLibrary: React.FC = () => {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<ExtendedDocument | null>(null)
-  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -87,35 +106,78 @@ export const DocumentLibrary: React.FC = () => {
 
   // Load data on mount
   useEffect(() => {
-    loadProjects()
-    loadDocuments()
+    initializeLibrary()
   }, [])
 
   // Load documents when project selection changes
   useEffect(() => {
-    loadDocuments()
+    if (selectedProjectId) {
+      loadDocuments()
+    }
   }, [selectedProjectId])
 
-  const loadProjects = async () => {
-    const result = await withErrorHandling(async () => {
-      return await ProjectAPI.getProjects()
-    })
+  const initializeLibrary = async () => {
+    console.log('📚 Initializing document library...')
+    setConnectionStatus('checking')
     
-    if (result) {
-      setProjects(result)
+    try {
+      // Test connection
+      const healthCheck = await ApiService.healthCheck()
+      
+      if (healthCheck.status === 'healthy') {
+        setConnectionStatus('connected')
+        console.log('✅ Backend connection established')
+        
+        // Load projects
+        await loadProjects()
+        await loadDocuments()
+        
+        toast.success('Document library ready!', { duration: 2000 })
+      } else {
+        throw new Error('Backend unhealthy')
+      }
+    } catch (error) {
+      setConnectionStatus('disconnected')
+      console.error('💥 Library initialization failed:', error)
+      toast.error('Failed to connect to backend. Please check the server.')
+    }
+  }
+
+  const loadProjects = async () => {
+    try {
+      const response = await ApiService.getProjects()
+      const projectsData = response.projects || []
+      
+      setProjects(projectsData)
+      console.log(`📁 Loaded ${projectsData.length} projects`)
+      
+      // Auto-select first project if available
+      if (projectsData.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(projectsData[0].id)
+        console.log(`🎯 Auto-selected project: ${projectsData[0].name}`)
+      }
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+      toast.error('Failed to load projects')
     }
   }
 
   const loadDocuments = async () => {
     setIsLoading(true)
-    const result = await withErrorHandling(async () => {
-      return await DocumentAPI.getDocuments(selectedProjectId || undefined)
-    })
-    
-    if (result) {
-      setDocuments(result)
+    try {
+      const response = await ApiService.getDocuments({
+        project_id: selectedProjectId || undefined
+      })
+      
+      const documentsData = response.documents || []
+      setDocuments(documentsData)
+      console.log(`📄 Loaded ${documentsData.length} documents`)
+    } catch (error) {
+      console.error('Failed to load documents:', error)
+      toast.error('Failed to load documents')
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   // File upload handling
@@ -126,6 +188,23 @@ export const DocumentLibrary: React.FC = () => {
     }
 
     const fileArray = Array.from(files)
+    
+    // Validate files first
+    try {
+      const validation = await ApiService.validateFiles(fileArray)
+      
+      if (validation.invalid_files > 0) {
+        const errors = validation.results
+          .filter(r => !r.valid)
+          .map(r => `${r.filename}: ${r.errors.join(', ')}`)
+        
+        toast.error(`Invalid files:\n${errors.join('\n')}`)
+        return
+      }
+    } catch (error) {
+      console.warn('File validation failed, proceeding with upload:', error)
+    }
+
     const newUploadingFiles: UploadingFile[] = fileArray.map(file => ({
       id: `upload-${Date.now()}-${Math.random()}`,
       file,
@@ -135,68 +214,46 @@ export const DocumentLibrary: React.FC = () => {
 
     setUploadingFiles(prev => [...prev, ...newUploadingFiles])
 
-    // Upload files one by one
-    for (const uploadingFile of newUploadingFiles) {
-      try {
-        // Update status to uploading
-        setUploadingFiles(prev => prev.map(f => 
-          f.id === uploadingFile.id 
-            ? { ...f, status: 'uploading' }
-            : f
+    // Upload files
+    try {
+      const result = await ApiService.uploadDocuments({
+        files: fileArray,
+        project_id: selectedProjectId
+      })
+
+      // Update upload status to completed
+      setUploadingFiles(prev => prev.map(f => 
+        newUploadingFiles.some(nf => nf.id === f.id)
+          ? { ...f, status: 'completed', progress: 100 }
+          : f
+      ))
+
+      toast.success(`Successfully uploaded ${fileArray.length} file(s)`)
+
+      // Remove completed uploads after delay
+      setTimeout(() => {
+        setUploadingFiles(prev => prev.filter(f => 
+          !newUploadingFiles.some(nf => nf.id === f.id)
         ))
+      }, 2000)
 
-        const result = await DocumentAPI.uploadDocument(
-          uploadingFile.file,
-          selectedProjectId,
-          (progress) => {
-            setUploadingFiles(prev => prev.map(f => 
-              f.id === uploadingFile.id 
-                ? { ...f, progress }
-                : f
-            ))
-          }
-        )
+      // Reload documents
+      setTimeout(() => {
+        loadDocuments()
+      }, 1000)
 
-        // Update status to processing
-        setUploadingFiles(prev => prev.map(f => 
-          f.id === uploadingFile.id 
-            ? { ...f, status: 'processing', progress: 100 }
-            : f
-        ))
+    } catch (error) {
+      console.error('Upload error:', error)
+      
+      // Mark uploads as failed
+      setUploadingFiles(prev => prev.map(f => 
+        newUploadingFiles.some(nf => nf.id === f.id)
+          ? { ...f, status: 'error', error: error instanceof Error ? error.message : 'Upload failed' }
+          : f
+      ))
 
-        // Wait a bit then mark as completed
-        setTimeout(() => {
-          setUploadingFiles(prev => prev.map(f => 
-            f.id === uploadingFile.id 
-              ? { ...f, status: 'completed' }
-              : f
-          ))
-
-          // Remove from uploading files after delay
-          setTimeout(() => {
-            setUploadingFiles(prev => prev.filter(f => f.id !== uploadingFile.id))
-          }, 2000)
-        }, 1000)
-
-        toast.success(`${uploadingFile.file.name} uploaded successfully`)
-
-      } catch (error) {
-        console.error('Upload error:', error)
-        
-        setUploadingFiles(prev => prev.map(f => 
-          f.id === uploadingFile.id 
-            ? { ...f, status: 'error', error: handleAPIError(error) }
-            : f
-        ))
-
-        toast.error(`Failed to upload ${uploadingFile.file.name}`)
-      }
+      toast.error('Upload failed. Please try again.')
     }
-
-    // Reload documents
-    setTimeout(() => {
-      loadDocuments()
-    }, 1000)
   }, [selectedProjectId])
 
   // Drag and drop handling
@@ -229,13 +286,13 @@ export const DocumentLibrary: React.FC = () => {
 
   // Document deletion
   const deleteDocument = useCallback(async (documentId: string) => {
-    const result = await withErrorHandling(async () => {
-      await DocumentAPI.deleteDocument(documentId)
-    })
-
-    if (result !== null) {
+    try {
+      await ApiService.deleteDocument(documentId)
       setDocuments(prev => prev.filter(doc => doc.id !== documentId))
       toast.success('Document deleted successfully')
+    } catch (error) {
+      console.error('Delete error:', error)
+      toast.error('Failed to delete document')
     }
   }, [])
 
@@ -259,7 +316,9 @@ export const DocumentLibrary: React.FC = () => {
         case 'name':
           return a.filename.localeCompare(b.filename)
         case 'date':
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          const dateA = a.uploaded_at || a.created_at || '1970-01-01'
+          const dateB = b.uploaded_at || b.created_at || '1970-01-01'
+          return new Date(dateB).getTime() - new Date(dateA).getTime()
         case 'size':
           return b.file_size - a.file_size
         case 'status':
@@ -269,179 +328,162 @@ export const DocumentLibrary: React.FC = () => {
       }
     })
 
-  // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
-
-  // Get status icon and color
-  const getStatusDisplay = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return {
-          icon: <CheckCircleSolidIcon className="w-4 h-4" />,
-          color: 'text-green-600',
-          bgColor: 'bg-green-100',
-          label: 'Completed'
-        }
-      case 'processing':
-        return {
-          icon: <ClockSolidIcon className="w-4 h-4" />,
-          color: 'text-yellow-600',
-          bgColor: 'bg-yellow-100',
-          label: 'Processing'
-        }
-      case 'failed':
-        return {
-          icon: <ExclamationTriangleSolidIcon className="w-4 h-4" />,
-          color: 'text-red-600',
-          bgColor: 'bg-red-100',
-          label: 'Failed'
-        }
-      default:
-        return {
-          icon: <ClockIcon className="w-4 h-4" />,
-          color: 'text-gray-600',
-          bgColor: 'bg-gray-100',
-          label: 'Unknown'
-        }
-    }
-  }
+  // Upload Progress Component
+  const UploadProgress: React.FC<{ uploadingFile: UploadingFile }> = ({ uploadingFile }) => (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <DocumentTextIcon className="w-4 h-4 text-blue-600" />
+          <span className="text-sm font-medium text-gray-900 truncate max-w-xs">
+            {uploadingFile.file.name}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {uploadingFile.status === 'completed' && (
+            <CheckCircleIcon className="w-4 h-4 text-green-600" />
+          )}
+          {uploadingFile.status === 'error' && (
+            <ExclamationTriangleIcon className="w-4 h-4 text-red-600" />
+          )}
+          <span className="text-xs text-gray-500">
+            {formatFileSize(uploadingFile.file.size)}
+          </span>
+        </div>
+      </div>
+      
+      {uploadingFile.status === 'error' && uploadingFile.error && (
+        <p className="text-xs text-red-600 mb-2">{uploadingFile.error}</p>
+      )}
+      
+      <div className="flex items-center gap-2">
+        <Progress 
+          value={uploadingFile.progress} 
+          className="flex-1 h-1.5"
+        />
+        <span className="text-xs text-gray-500 min-w-[3rem]">
+          {uploadingFile.progress}%
+        </span>
+      </div>
+      
+      <div className="flex items-center justify-between mt-1">
+        <span className="text-xs text-gray-500 capitalize">
+          {uploadingFile.status === 'uploading' ? 'Uploading...' :
+           uploadingFile.status === 'processing' ? 'Processing...' :
+           uploadingFile.status === 'completed' ? 'Completed!' :
+           'Failed'}
+        </span>
+      </div>
+    </motion.div>
+  )
 
   // Document Card Component
-  const DocumentCard: React.FC<{ document: ExtendedDocument; index: number }> = ({ document, index }) => {
-    const statusDisplay = getStatusDisplay(document.processing_status)
+  const DocumentCard: React.FC<{ document: ExtendedDocument }> = ({ document }) => {
+    const getStatusIcon = () => {
+      switch (document.processing_status) {
+        case 'completed':
+          return <CheckCircleSolidIcon className="w-4 h-4 text-green-600" />
+        case 'processing':
+          return <ClockSolidIcon className="w-4 h-4 text-yellow-600" />
+        case 'failed':
+          return <ExclamationTriangleSolidIcon className="w-4 h-4 text-red-600" />
+        default:
+          return <ClockIcon className="w-4 h-4 text-gray-400" />
+      }
+    }
 
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.05 }}
-        className="group"
-      >
-        <Card className="hover:shadow-md transition-all duration-200 border border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              {/* Document Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-2">
-                  <DocumentTextSolidIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                  <h3 className="font-medium text-gray-900 truncate">
-                    {document.filename}
-                  </h3>
-                </div>
-                
-                <div className="space-y-1 text-sm text-gray-600">
-                  <div className="flex items-center gap-4">
-                    <span>{formatFileSize(document.file_size)}</span>
-                    <span>{document.file_type}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <CalendarIcon className="w-3 h-3" />
-                    <span>{new Date(document.created_at).toLocaleDateString()}</span>
-                  </div>
-
-                  {document.extracted_length && (
-                    <div className="flex items-center gap-2">
-                      <SparklesIcon className="w-3 h-3" />
-                      <span>{document.extracted_length.toLocaleString()} characters extracted</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 ml-4">
-                {/* Status Badge */}
-                <Badge 
-                  variant="outline" 
-                  className={cn(statusDisplay.bgColor, statusDisplay.color, "border-0")}
-                >
-                  {statusDisplay.icon}
-                  <span className="ml-1">{statusDisplay.label}</span>
-                </Badge>
-
-                {/* Actions Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ArrowDownTrayIcon className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setSelectedDocument(document)}>
-                      <EyeIcon className="w-4 h-4 mr-2" />
-                      View Details
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      className="text-red-600"
-                      onClick={() => deleteDocument(document.id)}
-                    >
-                      <TrashIcon className="w-4 h-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-    )
-  }
-
-  // Upload Progress Component
-  const UploadProgress: React.FC<{ uploadingFile: UploadingFile }> = ({ uploadingFile }) => {
     const getStatusColor = () => {
-      switch (uploadingFile.status) {
-        case 'uploading': return 'bg-blue-500'
-        case 'processing': return 'bg-yellow-500'
-        case 'completed': return 'bg-green-500'
-        case 'error': return 'bg-red-500'
-        default: return 'bg-gray-500'
+      switch (document.processing_status) {
+        case 'completed':
+          return 'bg-green-100 text-green-800'
+        case 'processing':
+          return 'bg-yellow-100 text-yellow-800'
+        case 'failed':
+          return 'bg-red-100 text-red-800'
+        default:
+          return 'bg-gray-100 text-gray-800'
       }
     }
 
     return (
       <motion.div
-        initial={{ opacity: 0, height: 0 }}
-        animate={{ opacity: 1, height: 'auto' }}
-        exit={{ opacity: 0, height: 0 }}
-        className="bg-white border border-gray-200 rounded-lg p-4 mb-4"
+        layout
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
       >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <DocumentTextIcon className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-900">
-              {uploadingFile.file.name}
-            </span>
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <DocumentTextSolidIcon className="w-8 h-8 text-blue-600 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <h3 className="font-medium text-gray-900 truncate" title={document.filename}>
+                {document.filename}
+              </h3>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-gray-500">
+                  {formatFileSize(document.file_size)}
+                </span>
+                <span className="text-xs text-gray-300">•</span>
+                <span className="text-xs text-gray-500">
+                  {formatDate(document.uploaded_at || document.created_at || '1970-01-01')}
+                </span>
+              </div>
+            </div>
           </div>
           
-          <Badge variant="outline" className={cn("text-white border-0", getStatusColor())}>
-            {uploadingFile.status === 'uploading' && 'Uploading'}
-            {uploadingFile.status === 'processing' && 'Processing'}
-            {uploadingFile.status === 'completed' && 'Completed'}
-            {uploadingFile.status === 'error' && 'Error'}
-          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                </svg>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setSelectedDocument(document)}>
+                <EyeIcon className="w-4 h-4 mr-2" />
+                View Details
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => deleteDocument(document.id)}
+                className="text-red-600"
+              >
+                <TrashIcon className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        {uploadingFile.status !== 'error' && (
-          <Progress 
-            value={uploadingFile.progress} 
-            className="h-2"
-          />
-        )}
+        {/* Status Badge */}
+        <div className="flex items-center justify-between">
+          <Badge className={cn("flex items-center gap-1", getStatusColor())}>
+            {getStatusIcon()}
+            {document.processing_status}
+          </Badge>
+          
+          {document.tags.length > 0 && (
+            <div className="flex items-center gap-1">
+              <TagIcon className="w-3 h-3 text-gray-400" />
+              <span className="text-xs text-gray-500">
+                {document.tags.length} tags
+              </span>
+            </div>
+          )}
+        </div>
 
-        {uploadingFile.error && (
-          <div className="mt-2 text-sm text-red-600">
-            {uploadingFile.error}
-          </div>
+        {/* Summary */}
+        {document.summary && (
+          <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+            {document.summary}
+          </p>
         )}
       </motion.div>
     )
@@ -449,96 +491,110 @@ export const DocumentLibrary: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".pdf,.docx,.doc,.txt,.md"
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-              <FolderIcon className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
+              <DocumentTextIcon className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-semibold text-gray-900">Document Library</h1>
               <p className="text-sm text-gray-600">
-                {documents.length} documents
-                {selectedProjectId && ` in ${projects.find(p => p.id === selectedProjectId)?.name || 'Selected Project'}`}
+                {documents.length} documents • {uploadingFiles.length} uploading
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Project Selector */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <FolderIcon className="w-4 h-4 mr-2" />
-                  {selectedProjectId 
-                    ? projects.find(p => p.id === selectedProjectId)?.name || 'Project'
-                    : 'All Projects'
-                  }
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setSelectedProjectId(null)}>
-                  All Projects
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {projects.map(project => (
-                  <DropdownMenuItem 
-                    key={project.id}
-                    onClick={() => setSelectedProjectId(project.id)}
-                  >
-                    {project.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Upload Button */}
-            <Button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!selectedProjectId}
-              className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700"
-            >
-              <CloudArrowUpIcon className="w-4 h-4 mr-2" />
-              Upload Documents
-            </Button>
+          {/* Connection Status */}
+          <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+            connectionStatus === 'connected' 
+              ? 'bg-green-100 text-green-700' 
+              : connectionStatus === 'disconnected'
+              ? 'bg-red-100 text-red-700'
+              : 'bg-yellow-100 text-yellow-700'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              connectionStatus === 'connected' 
+                ? 'bg-green-500' 
+                : connectionStatus === 'disconnected'
+                ? 'bg-red-500'
+                : 'bg-yellow-500'
+            }`} />
+            {connectionStatus === 'connected' ? 'Connected' : 
+             connectionStatus === 'disconnected' ? 'Disconnected' : 'Checking...'}
           </div>
         </div>
 
-        {/* Filters and Search */}
+        {/* Project Selection */}
+        <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-2">
+            <FolderIcon className="w-4 h-4 text-gray-600" />
+            <select
+              value={selectedProjectId || ''}
+              onChange={(e) => setSelectedProjectId(e.target.value || null)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+            >
+              <option value="">All Projects</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name} ({project.document_count} docs)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Button onClick={loadDocuments} variant="outline" size="sm">
+            <ArrowPathIcon className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+
+        {/* Search and Filters */}
         <div className="flex items-center gap-4">
-          {/* Search */}
-          <div className="relative flex-1 max-w-md">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <div className="flex-1 max-w-md relative">
+            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <Input
               placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-9"
             />
           </div>
 
-          {/* Sort */}
+          {/* Sort Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <FunnelIcon className="w-4 h-4 mr-2" />
-                Sort by {sortBy}
+                {sortBy === 'name' ? 'Name' : 
+                 sortBy === 'date' ? 'Date' : 
+                 sortBy === 'size' ? 'Size' : 'Status'}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setSortBy('date')}>Date</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy('name')}>Name</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy('date')}>Date</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy('size')}>Size</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy('status')}>Status</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Filter */}
+          {/* Filter Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
-                <TagIcon className="w-4 h-4 mr-2" />
+                <FunnelIcon className="w-4 h-4 mr-2" />
                 {filterStatus === 'all' ? 'All Status' : filterStatus}
               </Button>
             </DropdownMenuTrigger>
@@ -556,9 +612,11 @@ export const DocumentLibrary: React.FC = () => {
       <AnimatePresence>
         {uploadingFiles.length > 0 && (
           <div className="p-4 bg-gray-50 border-b border-gray-200">
-            {uploadingFiles.map(uploadingFile => (
-              <UploadProgress key={uploadingFile.id} uploadingFile={uploadingFile} />
-            ))}
+            <div className="space-y-3">
+              {uploadingFiles.map(uploadingFile => (
+                <UploadProgress key={uploadingFile.id} uploadingFile={uploadingFile} />
+              ))}
+            </div>
           </div>
         )}
       </AnimatePresence>
@@ -581,9 +639,9 @@ export const DocumentLibrary: React.FC = () => {
             {selectedProjectId ? 'Drop files here or click to upload' : 'Select a project to upload documents'}
           </h3>
           <p className="text-gray-600 mb-4">
-            Supports PDF, DOCX, TXT files up to 100MB
+            Supports PDF, DOCX, TXT, MD files up to 50MB
           </p>
-          {selectedProjectId && (
+          {selectedProjectId && connectionStatus === 'connected' && (
             <Button 
               variant="outline" 
               onClick={() => fileInputRef.current?.click()}
@@ -591,6 +649,9 @@ export const DocumentLibrary: React.FC = () => {
               <PlusIcon className="w-4 h-4 mr-2" />
               Choose Files
             </Button>
+          )}
+          {connectionStatus === 'disconnected' && (
+            <p className="text-red-600 text-sm">Backend disconnected - please check connection</p>
           )}
         </div>
 
@@ -610,31 +671,23 @@ export const DocumentLibrary: React.FC = () => {
             </h3>
             <p className="text-gray-600 max-w-md mx-auto">
               {searchQuery 
-                ? 'Try adjusting your search query or filters'
-                : 'Upload your first document to get started with AI-powered analysis'
+                ? `No documents match "${searchQuery}". Try adjusting your search terms.`
+                : selectedProjectId 
+                  ? 'Upload your first document to get started with this project.'
+                  : 'Upload documents to projects to see them here.'
               }
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <AnimatePresence>
-              {filteredDocuments.map((document, index) => (
-                <DocumentCard key={document.id} document={document} index={index} />
+              {filteredDocuments.map((document) => (
+                <DocumentCard key={document.id} document={document} />
               ))}
             </AnimatePresence>
           </div>
         )}
       </div>
-
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept=".pdf,.docx,.doc,.txt,.md"
-        onChange={handleFileInputChange}
-        className="hidden"
-      />
 
       {/* Document Details Dialog */}
       <Dialog open={!!selectedDocument} onOpenChange={() => setSelectedDocument(null)}>
@@ -642,60 +695,56 @@ export const DocumentLibrary: React.FC = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <DocumentTextIcon className="w-5 h-5" />
-              {selectedDocument?.filename}
+              Document Details
             </DialogTitle>
-            <DialogDescription>
-              Document details and processing information
-            </DialogDescription>
           </DialogHeader>
           
           {selectedDocument && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="font-medium text-gray-700">File Size:</span>
-                  <span className="ml-2">{formatFileSize(selectedDocument.file_size)}</span>
+                  <span className="font-medium text-gray-600">Filename:</span>
+                  <p className="text-gray-900">{selectedDocument.filename}</p>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Type:</span>
-                  <span className="ml-2">{selectedDocument.file_type}</span>
+                  <span className="font-medium text-gray-600">File Size:</span>
+                  <p className="text-gray-900">{formatFileSize(selectedDocument.file_size)}</p>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Status:</span>
-                  <span className="ml-2">{getStatusDisplay(selectedDocument.processing_status).label}</span>
+                  <span className="font-medium text-gray-600">Type:</span>
+                  <p className="text-gray-900">{selectedDocument.file_type}</p>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Upload Date:</span>
-                  <span className="ml-2">{new Date(selectedDocument.created_at).toLocaleString()}</span>
+                  <span className="font-medium text-gray-600">Status:</span>
+                  <Badge className={cn("capitalize", 
+                    selectedDocument.processing_status === 'completed' ? 'bg-green-100 text-green-800' :
+                    selectedDocument.processing_status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  )}>
+                    {selectedDocument.processing_status}
+                  </Badge>
+                </div>
+                <div className="col-span-2">
+                  <span className="font-medium text-gray-600">Uploaded:</span>
+                  <p className="text-gray-900">{formatDate(selectedDocument.uploaded_at || selectedDocument.created_at || '1970-01-01')}</p>
                 </div>
               </div>
 
-              {selectedDocument.extracted_length && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-green-700 mb-2">
-                    <CheckCircleIcon className="w-4 h-4" />
-                    <span className="font-medium">Processing Complete</span>
+              {selectedDocument.tags.length > 0 && (
+                <div>
+                  <span className="font-medium text-gray-600 block mb-2">Tags:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedDocument.tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary">{tag}</Badge>
+                    ))}
                   </div>
-                  <p className="text-sm text-green-600">
-                    Successfully extracted {selectedDocument.extracted_length.toLocaleString()} characters 
-                    and made available for AI chat.
-                  </p>
                 </div>
               )}
 
-              {selectedDocument.project_ids.length > 0 && (
+              {selectedDocument.summary && (
                 <div>
-                  <span className="font-medium text-gray-700 block mb-2">Projects:</span>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDocument.project_ids.map(projectId => {
-                      const project = projects.find(p => p.id === projectId)
-                      return (
-                        <Badge key={projectId} variant="outline">
-                          {project?.name || projectId}
-                        </Badge>
-                      )
-                    })}
-                  </div>
+                  <span className="font-medium text-gray-600 block mb-2">Summary:</span>
+                  <p className="text-gray-900 text-sm">{selectedDocument.summary}</p>
                 </div>
               )}
             </div>
@@ -705,18 +754,6 @@ export const DocumentLibrary: React.FC = () => {
             <Button variant="outline" onClick={() => setSelectedDocument(null)}>
               Close
             </Button>
-            {selectedDocument && (
-              <Button 
-                variant="destructive"
-                onClick={() => {
-                  deleteDocument(selectedDocument.id)
-                  setSelectedDocument(null)
-                }}
-              >
-                <TrashIcon className="w-4 h-4 mr-2" />
-                Delete Document
-              </Button>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

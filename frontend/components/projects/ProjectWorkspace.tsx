@@ -1,4 +1,4 @@
-// frontend/components/projects/ProjectWorkspace.tsx
+// frontend/components/projects/ProjectWorkspace.tsx - An neue API angepasst
 'use client'
 
 import React, { useState, useCallback, useEffect } from 'react'
@@ -41,9 +41,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { cn } from '@/lib/utils'
-import { ProjectAPI, DocumentAPI, handleAPIError, withErrorHandling, Project, SystemInfo, HealthAPI } from '@/lib/api'
+import { cn, formatDate } from '@/lib/utils'
+import ApiService from '@/services/api'
 import toast from 'react-hot-toast'
+
+// Types
+interface Project {
+  id: string
+  name: string
+  description?: string
+  created_at: string
+  updated_at: string
+  document_ids: string[]
+  document_count?: number
+  chat_count?: number
+  status?: string
+  settings: Record<string, any>
+}
 
 interface ProjectWithStats extends Project {
   document_count: number
@@ -56,11 +70,32 @@ interface ProjectFormData {
   description: string
 }
 
+interface SystemInfo {
+  app: {
+    name: string
+    version: string
+    python_version: string
+  }
+  features: Record<string, boolean>
+  stats: {
+    projects: number
+    documents: number
+    chats: number
+    rag_documents: number
+  }
+  settings: {
+    chunk_size: number
+    chunk_overlap: number
+    top_k: number
+  }
+}
+
 export const ProjectWorkspace: React.FC = () => {
   // State Management
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -70,29 +105,70 @@ export const ProjectWorkspace: React.FC = () => {
 
   // Load data on mount
   useEffect(() => {
-    loadProjects()
-    loadSystemInfo()
+    initializeWorkspace()
   }, [])
+
+  const initializeWorkspace = async () => {
+    console.log('🚀 Initializing project workspace...')
+    setConnectionStatus('checking')
+    
+    try {
+      // Test connection first
+      const healthCheck = await ApiService.healthCheck()
+      
+      if (healthCheck.status === 'healthy') {
+        setConnectionStatus('connected')
+        console.log('✅ Backend connection established')
+        
+        // Load data
+        await Promise.all([
+          loadProjects(),
+          loadSystemInfo()
+        ])
+        
+        toast.success('Project workspace ready!', { duration: 2000 })
+      } else {
+        throw new Error('Backend unhealthy')
+      }
+    } catch (error) {
+      setConnectionStatus('disconnected')
+      console.error('💥 Workspace initialization failed:', error)
+      toast.error('Failed to connect to backend. Please check the server.')
+    }
+  }
 
   const loadProjects = async () => {
     setIsLoading(true)
-    const result = await withErrorHandling(async () => {
-      return await ProjectAPI.getProjects()
-    })
-    
-    if (result) {
-      setProjects(result)
+    try {
+      const response = await ApiService.getProjects()
+      const projectsData = response.projects || []
+      
+      // Transform projects with stats
+      const projectsWithStats: ProjectWithStats[] = projectsData.map(project => ({
+        ...project,
+        document_count: project.document_count || 0,
+        chat_count: project.chat_count || 0,
+        last_activity: project.updated_at || project.created_at
+      }))
+      
+      setProjects(projectsWithStats)
+      console.log(`📁 Loaded ${projectsData.length} projects`)
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+      toast.error('Failed to load projects')
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   const loadSystemInfo = async () => {
-    const result = await withErrorHandling(async () => {
-      return await HealthAPI.getSystemInfo()
-    }, false) // Don't show error toast for system info
-    
-    if (result) {
-      setSystemInfo(result)
+    try {
+      const info = await ApiService.getSystemInfo()
+      setSystemInfo(info)
+      console.log('📊 System info loaded')
+    } catch (error) {
+      console.error('Failed to load system info:', error)
+      // Don't show error toast for system info as it's not critical
     }
   }
 
@@ -104,38 +180,82 @@ export const ProjectWorkspace: React.FC = () => {
     }
 
     setIsSubmitting(true)
-    const result = await withErrorHandling(async () => {
-      return await ProjectAPI.createProject({
+    try {
+      const newProject = await ApiService.createProject({
         name: formData.name.trim(),
         description: formData.description.trim()
       })
-    })
 
-    if (result) {
-      setProjects(prev => [result, ...prev])
+      // Add to projects list with stats
+      const projectWithStats: ProjectWithStats = {
+        ...newProject,
+        document_count: 0,
+        chat_count: 0,
+        last_activity: newProject.created_at
+      }
+
+      setProjects(prev => [projectWithStats, ...prev])
       setShowCreateDialog(false)
       setFormData({ name: '', description: '' })
       toast.success('Project created successfully')
+    } catch (error) {
+      console.error('Create project error:', error)
+      toast.error('Failed to create project')
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsSubmitting(false)
   }, [formData])
+
+  // Project update
+  const updateProject = useCallback(async () => {
+    if (!selectedProject || !formData.name.trim()) {
+      toast.error('Project name is required')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const updatedProject = await ApiService.updateProject(selectedProject.id, {
+        name: formData.name.trim(),
+        description: formData.description.trim()
+      })
+
+      // Update in projects list
+      setProjects(prev => prev.map(p => 
+        p.id === selectedProject.id 
+          ? { ...p, ...updatedProject, last_activity: updatedProject.updated_at || p.last_activity }
+          : p
+      ))
+
+      setShowEditDialog(false)
+      setSelectedProject(null)
+      toast.success('Project updated successfully')
+    } catch (error) {
+      console.error('Update project error:', error)
+      toast.error('Failed to update project')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [selectedProject, formData])
 
   // Project deletion
   const deleteProject = useCallback(async () => {
     if (!selectedProject) return
 
     setIsSubmitting(true)
-    const result = await withErrorHandling(async () => {
-      await ProjectAPI.deleteProject(selectedProject.id)
-    })
-
-    if (result !== null) {
+    try {
+      await ApiService.deleteProject(selectedProject.id)
+      
       setProjects(prev => prev.filter(p => p.id !== selectedProject.id))
       setShowDeleteDialog(false)
       setSelectedProject(null)
       toast.success('Project deleted successfully')
+    } catch (error) {
+      console.error('Delete project error:', error)
+      toast.error('Failed to delete project')
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsSubmitting(false)
   }, [selectedProject])
 
   // Dialog handlers
@@ -146,7 +266,7 @@ export const ProjectWorkspace: React.FC = () => {
 
   const handleEditClick = (project: ProjectWithStats) => {
     setSelectedProject(project)
-    setFormData({ name: project.name, description: project.description })
+    setFormData({ name: project.name, description: project.description || '' })
     setShowEditDialog(true)
   }
 
@@ -194,20 +314,17 @@ export const ProjectWorkspace: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
+            className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
           >
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  </div>
-                  <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', stat.color)}>
-                    <stat.icon className="w-5 h-5" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-center gap-3">
+              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", stat.color)}>
+                <stat.icon className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+                <div className="text-sm text-gray-600">{stat.label}</div>
+              </div>
+            </div>
           </motion.div>
         ))}
       </div>
@@ -215,114 +332,93 @@ export const ProjectWorkspace: React.FC = () => {
   }
 
   // Project Card Component
-  const ProjectCard: React.FC<{ project: ProjectWithStats; index: number }> = ({ project, index }) => {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.1 }}
-        className="group"
-      >
-        <Card className="hover:shadow-lg transition-all duration-200 border border-gray-200 hover:border-gray-300">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <FolderSolidIcon className="w-5 h-5 text-white" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-lg font-semibold text-gray-900 truncate">
-                    {project.name}
-                  </CardTitle>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Created {new Date(project.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
+  const ProjectCard: React.FC<{ project: ProjectWithStats }> = ({ project }) => (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      whileHover={{ y: -4 }}
+      className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-all duration-200"
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <FolderSolidIcon className="w-6 h-6 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-gray-900 truncate" title={project.name}>
+              {project.name}
+            </h3>
+            <p className="text-sm text-gray-600 line-clamp-2 mt-1">
+              {project.description || 'No description provided'}
+            </p>
+          </div>
+        </div>
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <EllipsisVerticalIcon className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleEditClick(project)}>
+              <PencilIcon className="w-4 h-4 mr-2" />
+              Edit Project
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => handleDeleteClick(project)}
+              className="text-red-600"
+            >
+              <TrashIcon className="w-4 h-4 mr-2" />
+              Delete Project
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-              {/* Actions Menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <EllipsisVerticalIcon className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleEditClick(project)}>
-                    <PencilIcon className="w-4 h-4 mr-2" />
-                    Edit Project
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    className="text-red-600"
-                    onClick={() => handleDeleteClick(project)}
-                  >
-                    <TrashIcon className="w-4 h-4 mr-2" />
-                    Delete Project
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </CardHeader>
+      {/* Project Stats */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            <DocumentTextIcon className="w-4 h-4" />
+            <span>{project.document_count} docs</span>
+          </div>
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            <ChatBubbleLeftRightIcon className="w-4 h-4" />
+            <span>{project.chat_count || 0} chats</span>
+          </div>
+        </div>
+        
+        <Badge variant="secondary" className="text-xs">
+          {project.status || 'active'}
+        </Badge>
+      </div>
 
-          <CardContent className="pt-0">
-            {/* Description */}
-            {project.description && (
-              <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                {project.description}
-              </p>
-            )}
-
-            {/* Stats */}
-            <div className="flex items-center gap-4 mb-4 text-sm text-gray-600">
-              <div className="flex items-center gap-1">
-                <DocumentTextIcon className="w-4 h-4" />
-                <span>{project.document_count} documents</span>
-              </div>
-              {project.chat_count !== undefined && (
-                <div className="flex items-center gap-1">
-                  <ChatBubbleLeftRightIcon className="w-4 h-4" />
-                  <span>{project.chat_count} chats</span>
-                </div>
-              )}
-            </div>
-
-            {/* Status Badge */}
-            <div className="flex items-center justify-between">
-              <Badge 
-                variant={project.document_count > 0 ? "default" : "secondary"}
-                className="text-xs"
-              >
-                {project.document_count > 0 ? (
-                  <>
-                    <CheckCircleSolidIcon className="w-3 h-3 mr-1" />
-                    Active
-                  </>
-                ) : (
-                  <>
-                    <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                    Empty
-                  </>
-                )}
-              </Badge>
-
-              {/* Quick Actions */}
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="text-xs">
-                  <ArrowRightIcon className="w-3 h-3 mr-1" />
-                  Open
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-    )
-  }
+      {/* Last Activity */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1 text-xs text-gray-500">
+          <CalendarIcon className="w-3 h-3" />
+          <span>Updated {formatDate(project.last_activity || project.created_at)}</span>
+        </div>
+        
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={() => {
+            // TODO: Navigate to project details or chat
+            toast.info('Project navigation coming soon')
+          }}
+          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-3 py-1 h-7"
+        >
+          <ArrowRightIcon className="w-3 h-3 mr-1" />
+          Open
+        </Button>
+      </div>
+    </motion.div>
+  )
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -330,24 +426,42 @@ export const ProjectWorkspace: React.FC = () => {
       <div className="bg-white border-b border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <FolderIcon className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
+              <FolderSolidIcon className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">Projects</h1>
+              <h1 className="text-xl font-semibold text-gray-900">Project Workspace</h1>
               <p className="text-sm text-gray-600">
-                Manage your document collections and AI workspaces
+                Manage your RAG projects and documents
               </p>
             </div>
           </div>
 
-          <Button 
-            onClick={handleCreateClick}
-            className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700"
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            New Project
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* Connection Status */}
+            <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+              connectionStatus === 'connected' 
+                ? 'bg-green-100 text-green-700' 
+                : connectionStatus === 'disconnected'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-yellow-100 text-yellow-700'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' 
+                  ? 'bg-green-500' 
+                  : connectionStatus === 'disconnected'
+                  ? 'bg-red-500'
+                  : 'bg-yellow-500'
+              }`} />
+              {connectionStatus === 'connected' ? 'Connected' : 
+               connectionStatus === 'disconnected' ? 'Disconnected' : 'Checking...'}
+            </div>
+
+            <Button onClick={handleCreateClick} disabled={connectionStatus !== 'connected'}>
+              <PlusIcon className="w-4 h-4 mr-2" />
+              New Project
+            </Button>
+          </div>
         </div>
 
         {/* System Stats */}
@@ -367,32 +481,34 @@ export const ProjectWorkspace: React.FC = () => {
               <p className="text-gray-600">Loading projects...</p>
             </div>
           </div>
+        ) : connectionStatus === 'disconnected' ? (
+          <div className="text-center py-12">
+            <ExclamationTriangleIcon className="w-16 h-16 text-red-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Backend Disconnected</h3>
+            <p className="text-gray-600 max-w-md mx-auto mb-4">
+              Unable to connect to the backend server. Please check if the server is running.
+            </p>
+            <Button onClick={initializeWorkspace} variant="outline">
+              Retry Connection
+            </Button>
+          </div>
         ) : projects.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-12"
-          >
-            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <FolderIcon className="w-8 h-8 text-white" />
-            </div>
+          <div className="text-center py-12">
+            <FolderIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
             <p className="text-gray-600 max-w-md mx-auto mb-6">
-              Create your first project to start organizing documents and building your AI-powered knowledge base.
+              Create your first project to start organizing your documents and building RAG applications.
             </p>
-            <Button 
-              onClick={handleCreateClick}
-              className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700"
-            >
-              <PlusIcon className="w-4 h-4 mr-2" />
-              Create First Project
+            <Button onClick={handleCreateClick} size="lg">
+              <PlusIcon className="w-5 h-5 mr-2" />
+              Create Your First Project
             </Button>
-          </motion.div>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence>
-              {projects.map((project, index) => (
-                <ProjectCard key={project.id} project={project} index={index} />
+              {projects.map((project) => (
+                <ProjectCard key={project.id} project={project} />
               ))}
             </AnimatePresence>
           </div>
@@ -401,19 +517,22 @@ export const ProjectWorkspace: React.FC = () => {
 
       {/* Create Project Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <PlusIcon className="w-5 h-5" />
+              Create New Project
+            </DialogTitle>
             <DialogDescription>
-              Create a new project to organize your documents and AI conversations.
+              Create a new project to organize your documents and build RAG applications.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name">Project Name</Label>
+              <Label htmlFor="create-name">Project Name *</Label>
               <Input
-                id="name"
+                id="create-name"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Enter project name..."
@@ -422,9 +541,9 @@ export const ProjectWorkspace: React.FC = () => {
             </div>
             
             <div>
-              <Label htmlFor="description">Description (Optional)</Label>
+              <Label htmlFor="create-description">Description</Label>
               <Textarea
-                id="description"
+                id="create-description"
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Describe your project..."
@@ -445,7 +564,6 @@ export const ProjectWorkspace: React.FC = () => {
             <Button 
               onClick={createProject}
               disabled={!formData.name.trim() || isSubmitting}
-              className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700"
             >
               {isSubmitting ? (
                 <motion.div
@@ -464,9 +582,12 @@ export const ProjectWorkspace: React.FC = () => {
 
       {/* Edit Project Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Project</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <PencilIcon className="w-5 h-5" />
+              Edit Project
+            </DialogTitle>
             <DialogDescription>
               Update your project information.
             </DialogDescription>
@@ -474,7 +595,7 @@ export const ProjectWorkspace: React.FC = () => {
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="edit-name">Project Name</Label>
+              <Label htmlFor="edit-name">Project Name *</Label>
               <Input
                 id="edit-name"
                 value={formData.name}
@@ -506,14 +627,18 @@ export const ProjectWorkspace: React.FC = () => {
               Cancel
             </Button>
             <Button 
-              onClick={() => {
-                // TODO: Implement project update
-                toast.info('Project update functionality coming soon')
-                setShowEditDialog(false)
-              }}
+              onClick={updateProject}
               disabled={!formData.name.trim() || isSubmitting}
             >
-              <PencilIcon className="w-4 h-4 mr-2" />
+              {isSubmitting ? (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                />
+              ) : (
+                <PencilIcon className="w-4 h-4 mr-2" />
+              )}
               Update Project
             </Button>
           </DialogFooter>

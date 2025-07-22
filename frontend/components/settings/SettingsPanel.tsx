@@ -1,4 +1,4 @@
-// frontend/components/settings/SettingsPanel.tsx
+// frontend/components/settings/SettingsPanel.tsx - Fehler behoben
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -19,7 +19,7 @@ import {
   AlertCircleIcon,
   InfoIcon,
   SaveIcon,
-  ResetIcon,
+  RotateCcwIcon, // Ersetzt ResetIcon
   ExternalLinkIcon,
   ClipboardIcon,
   EyeIcon,
@@ -55,9 +55,30 @@ import {
   TabsTrigger 
 } from "@/components/ui/tabs"
 import { cn } from '@/lib/utils'
-import { HealthAPI, SystemInfo, withErrorHandling, copyToClipboard, downloadFile } from '@/lib/api'
+import { copyToClipboard, downloadFile } from '@/lib/utils' // Aus utils importieren
+import { ApiService } from '@/services/api' // Korrekte API import
 import { useStore } from '@/stores/useStore'
 import toast from 'react-hot-toast'
+
+interface SystemInfo {
+  app: {
+    name: string
+    version: string
+    python_version: string
+  }
+  features: Record<string, boolean>
+  stats: {
+    projects: number
+    documents: number
+    chats: number
+    rag_documents: number
+  }
+  settings: {
+    chunk_size: number
+    chunk_overlap: number
+    top_k: number
+  }
+}
 
 interface Settings {
   // API Settings
@@ -121,12 +142,12 @@ export const SettingsPanel: React.FC = () => {
   }, [])
 
   const loadSystemInfo = async () => {
-    const result = await withErrorHandling(async () => {
-      return await HealthAPI.getSystemInfo()
-    })
-    
-    if (result) {
+    try {
+      const result = await ApiService.getSystemInfo()
       setSystemInfo(result)
+    } catch (error) {
+      console.error('Failed to load system info:', error)
+      toast.error('Failed to load system information')
     }
     setLoading(false)
   }
@@ -150,8 +171,8 @@ export const SettingsPanel: React.FC = () => {
       localStorage.setItem('ragflow-settings', JSON.stringify(settings))
       
       // Update store
-      store.setTheme(settings.theme)
-      store.setSidebarCollapsed(settings.sidebarCollapsed)
+      store.setTheme?.(settings.theme)
+      store.setSidebarCollapsed?.(settings.sidebarCollapsed)
       
       toast.success('Settings saved successfully')
     } catch (error) {
@@ -164,7 +185,7 @@ export const SettingsPanel: React.FC = () => {
   const resetSettings = () => {
     setSettings(defaultSettings)
     localStorage.removeItem('ragflow-settings')
-    store.reset()
+    store.reset?.()
     toast.success('Settings reset to defaults')
     setShowResetDialog(false)
   }
@@ -180,6 +201,7 @@ export const SettingsPanel: React.FC = () => {
     const content = JSON.stringify(exportData, null, 2)
     downloadFile(content, `ragflow-settings-${new Date().toISOString().split('T')[0]}.json`, 'application/json')
     toast.success('Settings exported successfully')
+    setShowExportDialog(false)
   }
 
   const copySystemInfo = async () => {
@@ -263,7 +285,7 @@ Stats: ${systemInfo.stats.projects} projects, ${systemInfo.stats.documents} docu
                     ) : (
                       <AlertCircleIcon className="w-3 h-3 mr-1" />
                     )}
-                    {feature.enabled ? 'Available' : 'Unavailable'}
+                    {feature.enabled ? 'Enabled' : 'Disabled'}
                   </Badge>
                 </div>
               ))}
@@ -271,377 +293,337 @@ Stats: ${systemInfo.stats.projects} projects, ${systemInfo.stats.documents} docu
           </CardContent>
         </Card>
 
-        {/* Usage Statistics */}
+        {/* Statistics */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DatabaseIcon className="w-5 h-5" />
-              Usage Statistics
+              System Statistics
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {Object.entries(systemInfo.stats).map(([key, value]) => (
-                <div key={key} className="text-center p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900">{value}</div>
-                  <div className="text-sm text-gray-600 capitalize">
-                    {key.replace(/_/g, ' ')}
-                  </div>
-                </div>
-              ))}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{systemInfo.stats.projects}</div>
+                <div className="text-gray-600">Projects</div>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{systemInfo.stats.documents}</div>
+                <div className="text-gray-600">Documents</div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">{systemInfo.stats.chats}</div>
+                <div className="text-gray-600">Chats</div>
+              </div>
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <div className="text-2xl font-bold text-orange-600">{systemInfo.stats.rag_documents}</div>
+                <div className="text-gray-600">Indexed</div>
+              </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Configuration */}
-        {systemInfo.settings && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <SettingsIcon className="w-5 h-5" />
-                Backend Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                {Object.entries(systemInfo.settings).map(([key, value]) => (
-                  <div key={key}>
-                    <Label className="text-gray-600 capitalize">
-                      {key.replace(/_/g, ' ')}
-                    </Label>
-                    <div className="font-medium">{value}</div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     )
   }
 
-  // API Settings Component
-  const APISettingsSection: React.FC = () => (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <KeyIcon className="w-5 h-5" />
-            API Keys
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <Label>Show API Keys</Label>
-            <Switch
-              checked={showApiKeys}
-              onCheckedChange={setShowApiKeys}
-            />
+  // Main Settings Tabs
+  const renderSettingsTab = (tabId: string) => {
+    switch (tabId) {
+      case 'general':
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <KeyIcon className="w-5 h-5" />
+                  API Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="google-api-key">Google AI API Key</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowApiKeys(!showApiKeys)}
+                    >
+                      {showApiKeys ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <Input
+                    id="google-api-key"
+                    type={showApiKeys ? "text" : "password"}
+                    value={settings.googleApiKey}
+                    onChange={(e) => setSettings(prev => ({ ...prev, googleApiKey: e.target.value }))}
+                    placeholder="Enter your Google AI API key"
+                  />
+                  <p className="text-xs text-gray-600">
+                    Required for AI chat functionality. Get your key from{' '}
+                    <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      Google AI Studio
+                      <ExternalLinkIcon className="w-3 h-3 inline ml-1" />
+                    </a>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BrainIcon className="w-5 h-5" />
+                  RAG Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="chunk-size">Chunk Size</Label>
+                    <Input
+                      id="chunk-size"
+                      type="number"
+                      value={settings.chunkSize}
+                      onChange={(e) => setSettings(prev => ({ ...prev, chunkSize: parseInt(e.target.value) || 500 }))}
+                      min="100"
+                      max="2000"
+                    />
+                    <p className="text-xs text-gray-600">Characters per document chunk (100-2000)</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="chunk-overlap">Chunk Overlap</Label>
+                    <Input
+                      id="chunk-overlap"
+                      type="number"
+                      value={settings.chunkOverlap}
+                      onChange={(e) => setSettings(prev => ({ ...prev, chunkOverlap: parseInt(e.target.value) || 50 }))}
+                      min="0"
+                      max="500"
+                    />
+                    <p className="text-xs text-gray-600">Characters overlap between chunks (0-500)</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="top-k">Top K Results</Label>
+                    <Input
+                      id="top-k"
+                      type="number"
+                      value={settings.topK}
+                      onChange={(e) => setSettings(prev => ({ ...prev, topK: parseInt(e.target.value) || 5 }))}
+                      min="1"
+                      max="20"
+                    />
+                    <p className="text-xs text-gray-600">Number of relevant chunks to retrieve (1-20)</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="min-similarity">Min Similarity</Label>
+                    <Input
+                      id="min-similarity"
+                      type="number"
+                      step="0.01"
+                      value={settings.minSimilarity}
+                      onChange={(e) => setSettings(prev => ({ ...prev, minSimilarity: parseFloat(e.target.value) || 0.1 }))}
+                      min="0"
+                      max="1"
+                    />
+                    <p className="text-xs text-gray-600">Minimum similarity threshold (0.0-1.0)</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
+        )
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="google-api-key">Google AI API Key</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  id="google-api-key"
-                  type={showApiKeys ? "text" : "password"}
-                  value={settings.googleApiKey}
-                  onChange={(e) => setSettings(prev => ({ ...prev, googleApiKey: e.target.value }))}
-                  placeholder="Enter your Google AI API key..."
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowApiKeys(!showApiKeys)}
-                >
-                  {showApiKeys ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                </Button>
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                Required for AI chat functionality. Get your key from{' '}
-                <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline inline-flex items-center gap-1"
-                >
-                  Google AI Studio
-                  <ExternalLinkIcon className="w-3 h-3" />
-                </a>
-              </p>
-            </div>
+      case 'ui':
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PaletteIcon className="w-5 h-5" />
+                  Appearance
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="theme">Theme</Label>
+                  <Select value={settings.theme} onValueChange={(value: 'light' | 'dark' | 'system') => setSettings(prev => ({ ...prev, theme: value }))}>
+                    <SelectTrigger id="theme">
+                      <SelectValue placeholder="Select theme" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="dark">Dark</SelectItem>
+                      <SelectItem value="system">System</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div>
-              <Label htmlFor="openai-api-key">OpenAI API Key (Optional)</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  id="openai-api-key"
-                  type={showApiKeys ? "text" : "password"}
-                  value={settings.openaiApiKey}
-                  onChange={(e) => setSettings(prev => ({ ...prev, openaiApiKey: e.target.value }))}
-                  placeholder="Enter your OpenAI API key..."
-                />
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                Optional: For enhanced AI capabilities and embeddings
-              </p>
-            </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Collapsed Sidebar</Label>
+                    <p className="text-xs text-gray-600">Start with sidebar collapsed</p>
+                  </div>
+                  <Switch
+                    checked={settings.sidebarCollapsed}
+                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, sidebarCollapsed: checked }))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Enable Animations</Label>
+                    <p className="text-xs text-gray-600">Show smooth transitions and animations</p>
+                  </div>
+                  <Switch
+                    checked={settings.enableAnimations}
+                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableAnimations: checked }))}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BellIcon className="w-5 h-5" />
+                  Notifications
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Enable Notifications</Label>
+                    <p className="text-xs text-gray-600">Show toast notifications and alerts</p>
+                  </div>
+                  <Switch
+                    checked={settings.enableNotifications}
+                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableNotifications: checked }))}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        )
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BrainIcon className="w-5 h-5" />
-            RAG Configuration
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="chunk-size">Chunk Size</Label>
-              <Input
-                id="chunk-size"
-                type="number"
-                min="100"
-                max="2000"
-                value={settings.chunkSize}
-                onChange={(e) => setSettings(prev => ({ ...prev, chunkSize: parseInt(e.target.value) || 500 }))}
-              />
-              <p className="text-xs text-gray-600 mt-1">Text chunk size for document processing</p>
-            </div>
+      case 'advanced':
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShieldIcon className="w-5 h-5" />
+                  File Upload Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="max-file-size">Max File Size (MB)</Label>
+                  <Input
+                    id="max-file-size"
+                    type="number"
+                    value={settings.maxFileSize}
+                    onChange={(e) => setSettings(prev => ({ ...prev, maxFileSize: parseInt(e.target.value) || 100 }))}
+                    min="1"
+                    max="1000"
+                  />
+                  <p className="text-xs text-gray-600">Maximum file size for uploads (1-1000 MB)</p>
+                </div>
 
-            <div>
-              <Label htmlFor="chunk-overlap">Chunk Overlap</Label>
-              <Input
-                id="chunk-overlap"
-                type="number"
-                min="0"
-                max="500"
-                value={settings.chunkOverlap}
-                onChange={(e) => setSettings(prev => ({ ...prev, chunkOverlap: parseInt(e.target.value) || 50 }))}
-              />
-              <p className="text-xs text-gray-600 mt-1">Overlap between text chunks</p>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="allowed-types">Allowed File Types</Label>
+                  <Textarea
+                    id="allowed-types"
+                    value={settings.allowedFileTypes.join(', ')}
+                    onChange={(e) => setSettings(prev => ({ 
+                      ...prev, 
+                      allowedFileTypes: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
+                    }))}
+                    placeholder=".pdf, .docx, .txt, .md"
+                    rows={2}
+                  />
+                  <p className="text-xs text-gray-600 mt-1">
+                    Comma-separated list of allowed file extensions
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-            <div>
-              <Label htmlFor="top-k">Top K Results</Label>
-              <Input
-                id="top-k"
-                type="number"
-                min="1"
-                max="20"
-                value={settings.topK}
-                onChange={(e) => setSettings(prev => ({ ...prev, topK: parseInt(e.target.value) || 5 }))}
-              />
-              <p className="text-xs text-gray-600 mt-1">Number of search results to return</p>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <SettingsIcon className="w-5 h-5" />
+                  Advanced Options
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Auto-save Settings</Label>
+                    <p className="text-xs text-gray-600">Automatically save changes</p>
+                  </div>
+                  <Switch
+                    checked={settings.autoSave}
+                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, autoSave: checked }))}
+                  />
+                </div>
 
-            <div>
-              <Label htmlFor="min-similarity">Minimum Similarity</Label>
-              <Input
-                id="min-similarity"
-                type="number"
-                min="0"
-                max="1"
-                step="0.1"
-                value={settings.minSimilarity}
-                onChange={(e) => setSettings(prev => ({ ...prev, minSimilarity: parseFloat(e.target.value) || 0.1 }))}
-              />
-              <p className="text-xs text-gray-600 mt-1">Minimum similarity threshold for search</p>
-            </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Debug Mode</Label>
+                    <p className="text-xs text-gray-600">Show additional debugging information</p>
+                  </div>
+                  <Switch
+                    checked={settings.debugMode}
+                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, debugMode: checked }))}
+                  />
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-amber-600">
+                    <AlertCircleIcon className="w-4 h-4" />
+                    <Label>Danger Zone</Label>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowResetDialog(true)}
+                      className="border-red-200 text-red-600 hover:bg-red-50"
+                    >
+                      <RotateCcwIcon className="w-4 h-4 mr-2" />
+                      Reset Settings
+                    </Button>
+                    
+                    <Button 
+                      variant="outline"
+                      onClick={() => {
+                        localStorage.clear()
+                        window.location.reload()
+                      }}
+                      className="border-red-200 text-red-600 hover:bg-red-50"
+                    >
+                      <TrashIcon className="w-4 h-4 mr-2" />
+                      Clear All Data
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
+        )
 
-  // UI Settings Component
-  const UISettingsSection: React.FC = () => (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <PaletteIcon className="w-5 h-5" />
-            Appearance
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="theme">Theme</Label>
-            <Select 
-              value={settings.theme} 
-              onValueChange={(value: 'light' | 'dark' | 'system') => 
-                setSettings(prev => ({ ...prev, theme: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-                <SelectItem value="system">System</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      case 'system':
+        return <SystemInfoSection />
 
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Sidebar Collapsed by Default</Label>
-              <p className="text-xs text-gray-600">Start with collapsed sidebar</p>
-            </div>
-            <Switch
-              checked={settings.sidebarCollapsed}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, sidebarCollapsed: checked }))}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Enable Animations</Label>
-              <p className="text-xs text-gray-600">Smooth transitions and effects</p>
-            </div>
-            <Switch
-              checked={settings.enableAnimations}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableAnimations: checked }))}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BellIcon className="w-5 h-5" />
-            Notifications
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Enable Notifications</Label>
-              <p className="text-xs text-gray-600">Show toast notifications for actions</p>
-            </div>
-            <Switch
-              checked={settings.enableNotifications}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableNotifications: checked }))}
-            />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-
-  // Advanced Settings Component
-  const AdvancedSettingsSection: React.FC = () => (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldIcon className="w-5 h-5" />
-            File Upload Settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="max-file-size">Maximum File Size (MB)</Label>
-            <Input
-              id="max-file-size"
-              type="number"
-              min="1"
-              max="1000"
-              value={settings.maxFileSize}
-              onChange={(e) => setSettings(prev => ({ ...prev, maxFileSize: parseInt(e.target.value) || 100 }))}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="allowed-types">Allowed File Types</Label>
-            <Textarea
-              id="allowed-types"
-              value={settings.allowedFileTypes.join(', ')}
-              onChange={(e) => setSettings(prev => ({ 
-                ...prev, 
-                allowedFileTypes: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
-              }))}
-              placeholder=".pdf, .docx, .txt, .md"
-              rows={2}
-            />
-            <p className="text-xs text-gray-600 mt-1">
-              Comma-separated list of allowed file extensions
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5" />
-            Advanced Options
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Auto-save Settings</Label>
-              <p className="text-xs text-gray-600">Automatically save changes</p>
-            </div>
-            <Switch
-              checked={settings.autoSave}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, autoSave: checked }))}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Debug Mode</Label>
-              <p className="text-xs text-gray-600">Show additional debugging information</p>
-            </div>
-            <Switch
-              checked={settings.debugMode}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, debugMode: checked }))}
-            />
-          </div>
-
-          <Separator />
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-amber-600">
-              <AlertCircleIcon className="w-4 h-4" />
-              <Label>Danger Zone</Label>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowResetDialog(true)}
-                className="border-red-200 text-red-600 hover:bg-red-50"
-              >
-                <ResetIcon className="w-4 h-4 mr-2" />
-                Reset Settings
-              </Button>
-              
-              <Button 
-                variant="outline"
-                onClick={() => {
-                  localStorage.clear()
-                  window.location.reload()
-                }}
-                className="border-red-200 text-red-600 hover:bg-red-50"
-              >
-                <TrashIcon className="w-4 h-4 mr-2" />
-                Clear All Data
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
+      default:
+        return null
+    }
+  }
 
   if (loading) {
     return (
@@ -683,61 +665,69 @@ Stats: ${systemInfo.stats.projects} projects, ${systemInfo.stats.documents} docu
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                  className="w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"
                 />
               ) : (
                 <SaveIcon className="w-4 h-4 mr-2" />
               )}
-              Save Settings
+              {saving ? 'Saving...' : 'Save Settings'}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Settings Content */}
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <div className="border-b border-gray-200 bg-white px-6">
-            <TabsList className="grid w-full grid-cols-4 max-w-md">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="api">API & RAG</TabsTrigger>
-              <TabsTrigger value="ui">Interface</TabsTrigger>
-              <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          <div className="bg-white border-b border-gray-200 px-6">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="general" className="flex items-center gap-2">
+                <KeyIcon className="w-4 h-4" />
+                General
+              </TabsTrigger>
+              <TabsTrigger value="ui" className="flex items-center gap-2">
+                <PaletteIcon className="w-4 h-4" />
+                Appearance
+              </TabsTrigger>
+              <TabsTrigger value="advanced" className="flex items-center gap-2">
+                <ShieldIcon className="w-4 h-4" />
+                Advanced
+              </TabsTrigger>
+              <TabsTrigger value="system" className="flex items-center gap-2">
+                <ServerIcon className="w-4 h-4" />
+                System
+              </TabsTrigger>
             </TabsList>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-4xl mx-auto">
-              <TabsContent value="general" className="mt-0">
-                <SystemInfoSection />
-              </TabsContent>
-              
-              <TabsContent value="api" className="mt-0">
-                <APISettingsSection />
-              </TabsContent>
-              
-              <TabsContent value="ui" className="mt-0">
-                <UISettingsSection />
-              </TabsContent>
-              
-              <TabsContent value="advanced" className="mt-0">
-                <AdvancedSettingsSection />
-              </TabsContent>
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <TabsContent value={activeTab} className="mt-0">
+                  {renderSettingsTab(activeTab)}
+                </TabsContent>
+              </motion.div>
+            </AnimatePresence>
           </div>
         </Tabs>
       </div>
 
-      {/* Reset Confirmation Dialog */}
+      {/* Reset Dialog */}
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertCircleIcon className="w-5 h-5 text-red-500" />
+              <AlertCircleIcon className="w-5 h-5 text-amber-600" />
               Reset Settings
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to reset all settings to their default values? 
+              Are you sure you want to reset all settings to their default values?
               This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
@@ -746,7 +736,7 @@ Stats: ${systemInfo.stats.projects} projects, ${systemInfo.stats.documents} docu
               Cancel
             </Button>
             <Button variant="destructive" onClick={resetSettings}>
-              <ResetIcon className="w-4 h-4 mr-2" />
+              <RotateCcwIcon className="w-4 h-4 mr-2" />
               Reset Settings
             </Button>
           </DialogFooter>

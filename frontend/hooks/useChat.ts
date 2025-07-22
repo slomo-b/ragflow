@@ -1,87 +1,70 @@
-// === hooks/useChat.ts - Enhanced Version ===
-import { useState, useCallback } from 'react'
+// frontend/hooks/useChat.ts - An tatsächliche Backend API angepasst
+import { useState, useCallback, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
+import { ApiService, ChatResponse } from '@/services/api'
 
-interface ChatMessage {
+export interface ChatMessage {
   id: string
   content: string
   role: 'user' | 'assistant' | 'error'
   timestamp: Date
   sources?: Array<{
-    type: string
+    id: string
+    name: string
     filename: string
     excerpt: string
     relevance_score: number
-    match_type?: string
   }>
   intelligence_metadata?: {
-    sources_analyzed: number
-    context_enhanced: boolean
-    prompt_length: number
+    query_complexity: string
+    reasoning_depth: string
+    context_integration: string
   }
 }
 
-interface ChatResponse {
-  response: string
-  chat_id?: string
-  project_id?: string
-  timestamp: string
-  model_info?: {
-    model: string
-    version: string
-    features_used: {
-      intelligent_document_search: boolean
-      proactive_analysis: boolean
-      intent_recognition: boolean
-      fuzzy_matching: boolean
-      context_enhancement: boolean
-    }
-  }
-  sources?: Array<{
-    type: string
-    filename: string
-    excerpt: string
-    relevance_score: number
-    match_type?: string
-  }>
-  intelligence_metadata?: {
-    sources_analyzed: number
-    context_enhanced: boolean
-    prompt_length: number
-  }
-}
+export type ConnectionStatus = 'connected' | 'disconnected' | 'checking'
 
-export function useChat(projectId?: string) {
+export function useChat(selectedProjectId?: string) {
+  // State
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'unknown'>('unknown')
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking')
+  
+  // Refs
+  const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Check backend connection
-  const checkConnection = useCallback(async () => {
+  // Connection Check - Verwendet Backend Health Check
+  const checkConnection = useCallback(async (): Promise<boolean> => {
     try {
-      const response = await fetch('http://localhost:8000/api/health', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setConnectionStatus('connected')
-        return data
-      } else {
-        setConnectionStatus('disconnected')
-        return null
-      }
+      const response = await ApiService.healthCheck()
+      const isConnected = response.status === 'healthy'
+      setConnectionStatus(isConnected ? 'connected' : 'disconnected')
+      return isConnected
     } catch (error) {
       console.error('Connection check failed:', error)
       setConnectionStatus('disconnected')
-      return null
+      return false
     }
   }, [])
 
+  // Initial connection check
+  useEffect(() => {
+    checkConnection()
+    
+    // Periodic connection check
+    const interval = setInterval(checkConnection, 30000) // Check every 30 seconds
+    return () => clearInterval(interval)
+  }, [checkConnection])
+
+  // Send message function - Angepasst an Backend /api/chat Endpoint
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return
+    if (content.length > 1000) {
+      toast.error('Message too long (max 1000 characters)')
+      return
+    }
 
+    // Create user message
     const userMessage: ChatMessage = {
       id: Math.random().toString(36),
       content: content.trim(),
@@ -92,6 +75,14 @@ export function useChat(projectId?: string) {
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
 
+    // Abort previous request if any
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    // Create new abort controller
+    abortControllerRef.current = new AbortController()
+
     try {
       // Check connection first
       const healthCheck = await checkConnection()
@@ -99,57 +90,39 @@ export function useChat(projectId?: string) {
         throw new Error('Backend connection failed')
       }
 
-      // Prepare message payload
-      const messagePayload = {
-        messages: [...messages, userMessage].map(msg => ({
-          role: msg.role,
-          content: msg.content
-        })),
-        project_id: projectId
-      }
-
-      console.log('🚀 Sending enhanced chat request:', {
-        project_id: projectId,
-        message_count: messagePayload.messages.length,
-        user_query: content.substring(0, 50) + '...'
+      console.log('🚀 Sending chat request:', {
+        message: content.substring(0, 50) + '...',
+        project_id: selectedProjectId,
+        timestamp: new Date().toISOString()
       })
 
-      // Send to enhanced backend
-      const response = await fetch('http://localhost:8000/api/v1/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messagePayload),
+      // Send to backend using ApiService
+      const response: ChatResponse = await ApiService.sendChatMessage({
+        message: content.trim(),
+        project_id: selectedProjectId
       })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
-      }
-
-      const data: ChatResponse = await response.json()
-
-      console.log('✅ Enhanced chat response received:', {
-        sources_count: data.sources?.length || 0,
-        features_used: data.model_info?.features_used,
-        intelligence_metadata: data.intelligence_metadata
+      console.log('✅ Chat response received:', {
+        sources_count: response.sources?.length || 0,
+        model_info: response.model_info,
+        intelligence_metadata: response.intelligence_metadata
       })
 
+      // Create AI message
       const aiMessage: ChatMessage = {
-        id: data.chat_id || Math.random().toString(36),
-        content: data.response,
+        id: response.chat_id || Math.random().toString(36),
+        content: response.response,
         role: 'assistant',
-        timestamp: new Date(data.timestamp),
-        sources: data.sources,
-        intelligence_metadata: data.intelligence_metadata
+        timestamp: new Date(response.timestamp),
+        sources: response.sources,
+        intelligence_metadata: response.intelligence_metadata
       }
 
       setMessages(prev => [...prev, aiMessage])
 
       // Show enhanced features notification
-      if (data.model_info?.features_used) {
-        const features = data.model_info.features_used
+      if (response.model_info?.features_used) {
+        const features = response.model_info.features_used
         const activeFeatures = Object.entries(features)
           .filter(([_, active]) => active)
           .map(([feature, _]) => feature.replace(/_/g, ' '))
@@ -166,38 +139,51 @@ export function useChat(projectId?: string) {
       }
 
       // Show sources found notification
-      if (data.sources && data.sources.length > 0) {
-        const sourceFiles = [...new Set(data.sources.map(s => s.filename))].slice(0, 3)
+      if (response.sources && response.sources.length > 0) {
+        const sourceFiles = [...new Set(response.sources.map(s => s.filename || s.name))].slice(0, 3)
         toast.success(
-          `📄 Found relevant content in: ${sourceFiles.join(', ')}${data.sources.length > sourceFiles.length ? ` +${data.sources.length - sourceFiles.length} more` : ''}`,
+          `📄 Found relevant content in: ${sourceFiles.join(', ')}${response.sources.length > sourceFiles.length ? ` +${response.sources.length - sourceFiles.length} more` : ''}`,
           { 
             duration: 4000,
-            icon: '🔍'
+            icon: '📚'
+          }
+        )
+      }
+
+      // Intelligence metadata notification
+      if (response.intelligence_metadata) {
+        const metadata = response.intelligence_metadata
+        toast(
+          `🤖 Analysis: ${metadata.query_complexity} complexity, ${metadata.reasoning_depth} reasoning`,
+          { 
+            duration: 2000,
+            icon: '🧠'
           }
         )
       }
 
     } catch (error) {
-      console.error('Enhanced chat error:', error)
+      console.error('Chat request failed:', error)
       
-      let errorMessage = 'Es gab einen unerwarteten Fehler.'
+      let errorMessage = 'Sorry, something went wrong. Please try again.'
       
       if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('connection failed')) {
-          errorMessage = `🔗 Verbindung zum Backend fehlgeschlagen. 
-          
-Stelle sicher, dass:
-• Der Backend-Server läuft (http://localhost:8000)
-• Die GOOGLE_API_KEY in der .env Datei konfiguriert ist
-• Keine Firewall den Zugriff blockiert
-
-Versuche es in ein paar Sekunden erneut.`
-        } else if (error.message.includes('HTTP 400')) {
-          errorMessage = '⚠️ Ungültige Anfrage. Bitte versuche es mit einer anderen Formulierung.'
-        } else if (error.message.includes('HTTP 500')) {
-          errorMessage = '🔧 Server-Fehler. Das Backend hat ein Problem bei der Verarbeitung.'
+        if (error.name === 'AbortError') {
+          // Request was aborted, don't show error message
+          return
+        } else if (error.message.includes('Backend connection failed')) {
+          errorMessage = '🔌 Backend is offline. Please check the server connection.'
+          setConnectionStatus('disconnected')
+        } else if (error.message.includes('Google AI API key not configured')) {
+          errorMessage = '🔑 AI service not configured. Please set the Google API key in backend settings.'
+        } else if (error.message.includes('timeout')) {
+          errorMessage = '⏰ Request timed out. The AI service might be overloaded. Please try again.'
+        } else if (error.message.includes('429')) {
+          errorMessage = '🚦 Rate limit exceeded. Please wait a moment before trying again.'
+        } else if (error.message.includes('500')) {
+          errorMessage = '🔧 Server error. Please try again or contact support.'
         } else {
-          errorMessage = `❌ Fehler: ${error.message}`
+          errorMessage = `❌ Error: ${error.message}`
         }
       }
 
@@ -219,10 +205,14 @@ Versuche es in ein paar Sekunden erneut.`
       
     } finally {
       setIsLoading(false)
+      abortControllerRef.current = null
     }
-  }, [messages, projectId, isLoading, checkConnection, connectionStatus])
+  }, [selectedProjectId, isLoading, checkConnection, connectionStatus])
 
   const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
     setIsLoading(false)
     toast.info('Generation stopped', { duration: 2000 })
   }, [])
@@ -247,24 +237,19 @@ Versuche es in ein paar Sekunden erneut.`
     }
   }, [messages, sendMessage])
 
-  // Test backend connection
+  // Test backend connection - Verwendet tatsächlichen Backend-Endpoint
   const testConnection = useCallback(async () => {
     const loadingToast = toast.loading('Testing backend connection...')
     
     try {
-      const response = await fetch('http://localhost:8000/api/v1/chat/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-
-      const data = await response.json()
+      const result = await ApiService.testConnection()
       
-      if (data.status === 'success') {
+      if (result.status === 'success') {
         toast.success('✅ Backend connection successful!', { id: loadingToast })
         setConnectionStatus('connected')
         return true
       } else {
-        toast.error(`❌ Backend test failed: ${data.message}`, { id: loadingToast })
+        toast.error(`❌ Backend test failed: ${result.message}`, { id: loadingToast })
         setConnectionStatus('disconnected')
         return false
       }
@@ -275,33 +260,79 @@ Versuche es in ein paar Sekunden erneut.`
     }
   }, [])
 
-  // Get chat statistics
-  const getChatStats = useCallback(() => {
-    const userMessages = messages.filter(msg => msg.role === 'user').length
-    const aiMessages = messages.filter(msg => msg.role === 'assistant').length
-    const errorMessages = messages.filter(msg => msg.role === 'error').length
-    const totalSources = messages.reduce((sum, msg) => sum + (msg.sources?.length || 0), 0)
+  // Test AI service - Sendet Test-Nachricht
+  const testAI = useCallback(async () => {
+    const loadingToast = toast.loading('Testing AI service...')
     
-    return {
-      total_messages: messages.length,
-      user_messages: userMessages,
-      ai_messages: aiMessages,
-      error_messages: errorMessages,
-      sources_found: totalSources,
-      has_intelligence_data: messages.some(msg => msg.intelligence_metadata)
+    try {
+      // Get AI info first
+      const aiInfo = await ApiService.getAIInfo()
+      
+      if (!aiInfo.api_configured) {
+        toast.error('❌ Google AI API key not configured', { id: loadingToast })
+        return false
+      }
+
+      // Send test message
+      await sendMessage('Hello, this is a connection test.')
+      
+      toast.success('✅ AI service is working!', { id: loadingToast })
+      return true
+      
+    } catch (error) {
+      console.error('AI test failed:', error)
+      toast.error('❌ AI service test failed. Check API key configuration.', { id: loadingToast })
+      return false
     }
-  }, [messages])
+  }, [sendMessage])
+
+  // Get connection status info
+  const getConnectionInfo = useCallback(async () => {
+    try {
+      const [healthInfo, aiInfo, config] = await Promise.all([
+        ApiService.healthCheck(),
+        ApiService.getAIInfo(),
+        ApiService.getConfiguration()
+      ])
+
+      return {
+        backend: {
+          status: healthInfo.status,
+          version: healthInfo.version,
+          timestamp: healthInfo.timestamp
+        },
+        ai: {
+          configured: aiInfo.api_configured,
+          model: aiInfo.model,
+          provider: aiInfo.provider
+        },
+        config: {
+          google_api_configured: config.google_api_configured,
+          max_file_size: config.max_file_size
+        }
+      }
+    } catch (error) {
+      console.error('Failed to get connection info:', error)
+      return null
+    }
+  }, [])
 
   return {
+    // State
     messages,
     isLoading,
     connectionStatus,
+    
+    // Actions  
     sendMessage,
     stopGeneration,
     clearChat,
     retryLastMessage,
-    testConnection,
+    
+    // Connection utilities
     checkConnection,
-    getChatStats
+    testConnection,
+    testAI,
+    getConnectionInfo
   }
 }
