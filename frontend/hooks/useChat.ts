@@ -1,7 +1,7 @@
-// frontend/hooks/useChat.ts - An tatsächliche Backend API angepasst
+// frontend/hooks/useChat.ts - Vollständig korrigiert für RAGFlow Backend
 import { useState, useCallback, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { ApiService, ChatResponse } from '@/services/api'
+import ApiService, { ChatResponse } from '@/services/api'
 
 export interface ChatMessage {
   id: string
@@ -33,7 +33,7 @@ export function useChat(selectedProjectId?: string) {
   // Refs
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Connection Check - Verwendet Backend Health Check
+  // ===== CONNECTION MANAGEMENT =====
   const checkConnection = useCallback(async (): Promise<boolean> => {
     try {
       const response = await ApiService.healthCheck()
@@ -56,7 +56,7 @@ export function useChat(selectedProjectId?: string) {
     return () => clearInterval(interval)
   }, [checkConnection])
 
-  // Send message function - Angepasst an Backend /api/chat Endpoint
+  // ===== SEND MESSAGE - KORRIGIERT =====
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return
     if (content.length > 1000) {
@@ -96,10 +96,14 @@ export function useChat(selectedProjectId?: string) {
         timestamp: new Date().toISOString()
       })
 
-      // Send to backend using ApiService
+      // ✅ Send to backend using corrected ApiService
       const response: ChatResponse = await ApiService.sendChatMessage({
         message: content.trim(),
-        project_id: selectedProjectId
+        project_id: selectedProjectId,
+        // Optional parameters can be added:
+        // model: 'gemini-pro',
+        // temperature: 0.7,
+        // max_tokens: 1000
       })
 
       console.log('✅ Chat response received:', {
@@ -120,6 +124,8 @@ export function useChat(selectedProjectId?: string) {
 
       setMessages(prev => [...prev, aiMessage])
 
+      // ===== ENHANCED NOTIFICATIONS =====
+      
       // Show enhanced features notification
       if (response.model_info?.features_used) {
         const features = response.model_info.features_used
@@ -182,6 +188,8 @@ export function useChat(selectedProjectId?: string) {
           errorMessage = '🚦 Rate limit exceeded. Please wait a moment before trying again.'
         } else if (error.message.includes('500')) {
           errorMessage = '🔧 Server error. Please try again or contact support.'
+        } else if (error.message.includes('503')) {
+          errorMessage = '🔑 AI service not available. Please check the API configuration.'
         } else {
           errorMessage = `❌ Error: ${error.message}`
         }
@@ -209,12 +217,17 @@ export function useChat(selectedProjectId?: string) {
     }
   }, [selectedProjectId, isLoading, checkConnection, connectionStatus])
 
+  // ===== UTILITY FUNCTIONS =====
+  
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
     setIsLoading(false)
-    toast.info('Generation stopped', { duration: 2000 })
+    toast('Generation stopped', { 
+      icon: 'ℹ️',
+      duration: 2000 
+    })
   }, [])
 
   const clearChat = useCallback(() => {
@@ -237,7 +250,9 @@ export function useChat(selectedProjectId?: string) {
     }
   }, [messages, sendMessage])
 
-  // Test backend connection - Verwendet tatsächlichen Backend-Endpoint
+  // ===== TEST FUNCTIONS =====
+  
+  // Test backend connection
   const testConnection = useCallback(async () => {
     const loadingToast = toast.loading('Testing backend connection...')
     
@@ -260,7 +275,7 @@ export function useChat(selectedProjectId?: string) {
     }
   }, [])
 
-  // Test AI service - Sendet Test-Nachricht
+  // Test AI service
   const testAI = useCallback(async () => {
     const loadingToast = toast.loading('Testing AI service...')
     
@@ -273,66 +288,118 @@ export function useChat(selectedProjectId?: string) {
         return false
       }
 
+      toast.success('✅ AI service ready!', { id: loadingToast })
+      
       // Send test message
       await sendMessage('Hello, this is a connection test.')
-      
-      toast.success('✅ AI service is working!', { id: loadingToast })
       return true
-      
+
     } catch (error) {
       console.error('AI test failed:', error)
-      toast.error('❌ AI service test failed. Check API key configuration.', { id: loadingToast })
+      
+      if (error instanceof Error) {
+        if (error.message.includes('503')) {
+          toast.error('❌ Google AI API key not configured', { id: loadingToast })
+        } else {
+          toast.error(`❌ AI test failed: ${error.message}`, { id: loadingToast })
+        }
+      } else {
+        toast.error('❌ AI service unavailable', { id: loadingToast })
+      }
       return false
     }
   }, [sendMessage])
 
-  // Get connection status info
-  const getConnectionInfo = useCallback(async () => {
+  // ===== CHAT HISTORY FUNCTIONS =====
+  
+  const loadChatHistory = useCallback(async (project_id?: string) => {
     try {
-      const [healthInfo, aiInfo, config] = await Promise.all([
-        ApiService.healthCheck(),
-        ApiService.getAIInfo(),
-        ApiService.getConfiguration()
-      ])
-
-      return {
-        backend: {
-          status: healthInfo.status,
-          version: healthInfo.version,
-          timestamp: healthInfo.timestamp
-        },
-        ai: {
-          configured: aiInfo.api_configured,
-          model: aiInfo.model,
-          provider: aiInfo.provider
-        },
-        config: {
-          google_api_configured: config.google_api_configured,
-          max_file_size: config.max_file_size
-        }
-      }
+      const chats = await ApiService.getChatHistory(project_id)
+      console.log('📜 Chat history loaded:', chats)
+      // TODO: Implement chat history loading logic
+      toast('Chat history feature coming soon', { 
+        icon: 'ℹ️',
+        duration: 2000 
+      })
     } catch (error) {
-      console.error('Failed to get connection info:', error)
-      return null
+      console.error('Failed to load chat history:', error)
+      toast.error('Failed to load chat history')
     }
   }, [])
 
+  const saveCurrentChat = useCallback(async () => {
+    if (messages.length === 0) {
+      toast('No messages to save', { 
+        icon: 'ℹ️',
+        duration: 2000 
+      })
+      return
+    }
+
+    try {
+      // TODO: Implement chat saving when backend supports it
+      toast('Chat saving feature coming soon', { 
+        icon: 'ℹ️',
+        duration: 2000 
+      })
+    } catch (error) {
+      console.error('Failed to save chat:', error)
+      toast.error('Failed to save chat')
+    }
+  }, [messages])
+
+  // ===== CHAT STATISTICS =====
+  
+  const getChatStats = useCallback(() => {
+    const userMessages = messages.filter(m => m.role === 'user').length
+    const assistantMessages = messages.filter(m => m.role === 'assistant').length
+    const errorMessages = messages.filter(m => m.role === 'error').length
+    const totalSources = messages.reduce((acc, m) => acc + (m.sources?.length || 0), 0)
+
+    return {
+      userMessages,
+      assistantMessages,
+      errorMessages,
+      totalMessages: messages.length,
+      totalSources,
+      lastActivity: messages.length > 0 ? messages[messages.length - 1].timestamp : null
+    }
+  }, [messages])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
+    // Return hook interface
   return {
     // State
     messages,
     isLoading,
     connectionStatus,
     
-    // Actions  
+    // Core functions
     sendMessage,
     stopGeneration,
     clearChat,
     retryLastMessage,
     
-    // Connection utilities
-    checkConnection,
+    // Test functions
     testConnection,
     testAI,
-    getConnectionInfo
+    
+    // History functions
+    loadChatHistory,
+    saveCurrentChat,
+    
+    // Utility functions
+    getChatStats,
+    checkConnection
   }
 }
+
+export default useChat

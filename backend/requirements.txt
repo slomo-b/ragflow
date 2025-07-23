@@ -1,48 +1,42 @@
-# RagFlow Backend Requirements - Latest Versions 2025
-# Optimiert für Python 3.13 mit modernsten Bibliotheken
+# backend/requirements.txt - Korrigierte Dependencies
 
-# === CORE WEB FRAMEWORK (Latest) ===
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
-python-multipart>=0.0.12
+# === FASTAPI & CORE ===
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+pydantic==2.5.0
+pydantic-settings==2.1.0
 
-# === PYDANTIC V2 (Latest) ===
-pydantic>=2.10.0
-pydantic-settings>=2.10.0
+# === DATABASE & EMBEDDINGS ===
+chromadb==0.4.18
+sentence-transformers==2.2.2
+# Alternative: transformers==4.36.0 (falls sentence-transformers Probleme macht)
 
-# === AI & ML (Latest Stable) ===
-google-generativeai>=0.8.0
-openai>=1.54.0  # Falls du auch OpenAI nutzen willst
+# === AI & LLM ===
+google-generativeai==0.3.2
+openai==1.3.7  # Optional für andere LLM Provider
 
-# === DATA PROCESSING (Latest) ===
-numpy>=2.0.0
-pandas>=2.2.0
-scikit-learn>=1.6.0
+# === DOCUMENT PROCESSING ===
+PyPDF2==3.0.1
+python-docx==1.1.0
+Markdown==3.5.1
+beautifulsoup4==4.12.2
+chardet==5.2.0
 
-# === DOCUMENT PROCESSING (Modern) ===
-pypdf>=5.1.0  # Moderner Ersatz für PyPDF2
-python-docx>=1.1.0
-python-multipart>=0.0.12
+# === HTTP & UTILITIES ===
+httpx==0.25.2
+requests==2.31.0
+aiofiles==23.2.1
 
-# === VECTOR EMBEDDINGS (Optional aber empfohlen) ===
-sentence-transformers>=3.3.0
-chromadb>=0.5.0  # Für persistente Vektordatenbank
-faiss-cpu>=1.9.0  # Schnelle Vektorsuche
+# === LOGGING & MONITORING ===
+rich==13.7.0
+python-json-logger==2.0.7
 
-# === UTILITIES (Latest) ===
-python-dotenv>=1.0.1
-rich>=13.9.0  # Für schöne Terminal-Ausgaben
-typer>=0.15.0  # Für CLI (falls gewünscht)
+# === DEVELOPMENT ===
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
 
-# === ASYNC & PERFORMANCE ===
-httpx>=0.28.0  # Für async HTTP requests
-asyncio-mqtt>=0.16.0  # Falls MQTT gebraucht wird
-
-# === MONITORING & LOGGING (Optional) ===
-loguru>=0.7.0  # Besseres Logging
-prometheus-client>=0.21.0  # Metriken
-
-# === DEVELOPMENT (Optional) ===
-# pytest>=8.3.0
-# black>=24.0.0
-# ruff>=0.8.0  # Schneller Linter/Formatter
+# === ENVIRONMENT ===
+python-dotenv==1.0.0

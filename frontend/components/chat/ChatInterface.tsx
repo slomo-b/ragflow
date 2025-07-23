@@ -1,4 +1,4 @@
-// frontend/components/chat/ChatInterface.tsx - An neue API angepasst
+// frontend/components/chat/ChatInterface.tsx - Vollständig korrigiert
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
@@ -19,24 +19,24 @@ import {
   Database,
   Sparkles,
   WifiOff,
-  Zap
+  Zap,
+  StopCircle,
+  RotateCcw,
+  Save,
+  History
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { ApiService } from '@/services/api'
+import ApiService, { Project } from '@/services/api'
 import { useChat } from '@/hooks/useChat'
 
-// Types
-interface Project {
-  id: string
-  name: string
-  description: string
-  document_count: number
-}
-
+// ✅ Types korrigiert nach Backend Schema
 interface ChatStats {
+  userMessages: number
+  assistantMessages: number
+  errorMessages: number
   totalMessages: number
-  responseTime: number
-  lastActivity: string
+  totalSources: number
+  lastActivity: Date | null
 }
 
 export const ChatInterface: React.FC = () => {
@@ -45,28 +45,28 @@ export const ChatInterface: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
-  const [stats, setStats] = useState<ChatStats>({
-    totalMessages: 0,
-    responseTime: 0,
-    lastActivity: ''
-  })
+  const [showSettings, setShowSettings] = useState(false)
 
-  // Use enhanced chat hook
+  // ✅ Use corrected chat hook
   const {
     messages,
     isLoading,
     connectionStatus,
     sendMessage,
+    stopGeneration,
     clearChat,
+    retryLastMessage,
     testConnection,
-    testAI
+    testAI,
+    getChatStats,
+    checkConnection
   } = useChat(selectedProjectId || undefined)
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Auto-scroll to bottom
+  // ===== AUTO-SCROLL =====
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
@@ -75,7 +75,7 @@ export const ChatInterface: React.FC = () => {
     scrollToBottom()
   }, [messages, scrollToBottom])
 
-  // Load projects on mount
+  // ===== INITIALIZATION =====
   useEffect(() => {
     initializeChat()
   }, [])
@@ -85,7 +85,7 @@ export const ChatInterface: React.FC = () => {
     console.log('🧪 Starting API connectivity test...')
     
     try {
-      // Test connection using ApiService
+      // ✅ Test connection using corrected ApiService
       const healthCheck = await ApiService.healthCheck()
       
       if (healthCheck.status === 'healthy') {
@@ -104,7 +104,7 @@ export const ChatInterface: React.FC = () => {
           console.log(`🎯 Auto-selected project: ${projectsData[0].name}`)
         }
         
-        toast.success('Connected to RagFlow backend!', { duration: 2000 })
+        toast.success('Connected to RAGFlow backend!', { duration: 2000 })
       } else {
         throw new Error('Backend unhealthy')
       }
@@ -114,386 +114,427 @@ export const ChatInterface: React.FC = () => {
     }
   }
 
-  // Copy message function
-  const copyMessage = async (messageId: string, content: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopiedMessageId(messageId)
-      toast.success('Message copied to clipboard!', { duration: 1500 })
-      setTimeout(() => setCopiedMessageId(null), 2000)
-    } catch (error) {
-      toast.error('Failed to copy message')
-    }
-  }
+  // ===== MESSAGE HANDLING =====
+  const handleSendMessage = useCallback(async () => {
+    if (!input.trim() || isLoading) return
 
-  // Handle message sending
-  const handleSendMessage = async () => {
-    const messageContent = input.trim()
-    if (!messageContent || isLoading || connectionStatus === 'disconnected') return
-
-    // Use the chat hook's sendMessage function
-    await sendMessage(messageContent)
-    
-    // Clear input and update stats
+    const message = input.trim()
     setInput('')
-    setStats(prev => ({
-      ...prev,
-      totalMessages: prev.totalMessages + 1,
-      lastActivity: new Date().toISOString()
-    }))
-  }
 
-  // Handle Enter key in textarea
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+    // Focus back to input after sending
+    setTimeout(() => {
+      inputRef.current?.focus()
+    }, 100)
+
+    await sendMessage(message)
+  }, [input, isLoading, sendMessage])
+
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
     }
-  }
+  }, [handleSendMessage])
 
-  // Handle input changes with auto-resize
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value
-    if (value.length <= 1000) {
-      setInput(value)
+  // ===== UTILITY FUNCTIONS =====
+  const copyToClipboard = useCallback(async (text: string, messageId: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedMessageId(messageId)
+      toast.success('Copied to clipboard!')
       
-      // Auto-resize textarea
-      if (inputRef.current) {
-        inputRef.current.style.height = 'auto'
-        inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`
-      }
+      setTimeout(() => {
+        setCopiedMessageId(null)
+      }, 2000)
+    } catch (error) {
+      toast.error('Failed to copy to clipboard')
+    }
+  }, [])
+
+  const handleProjectChange = useCallback((projectId: string) => {
+    setSelectedProjectId(projectId || null)
+    console.log(`🎯 Selected project: ${projectId}`)
+  }, [])
+
+  const refreshProjects = useCallback(async () => {
+    try {
+      const response = await ApiService.getProjects()
+      setProjects(response.projects || [])
+      toast.success('Projects refreshed')
+    } catch (error) {
+      console.error('Failed to refresh projects:', error)
+      toast.error('Failed to refresh projects')
+    }
+  }, [])
+
+  // ===== CHAT STATS =====
+  const stats: ChatStats = getChatStats()
+
+  // ===== RENDER HELPERS =====
+  const getConnectionStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connected': return 'text-green-600 bg-green-100'
+      case 'disconnected': return 'text-red-600 bg-red-100'
+      default: return 'text-yellow-600 bg-yellow-100'
     }
   }
 
-  // Project selector
-  const ProjectSelector = () => (
-    <div className="bg-white border-b border-gray-200 p-4">
-      <div className="flex items-center justify-between max-w-4xl mx-auto">
-        <div className="flex items-center gap-3">
-          <Database className="w-5 h-5 text-blue-600" />
-          <div>
-            <h3 className="font-medium text-gray-900">Select Project</h3>
-            <p className="text-sm text-gray-600">Choose a project to chat with its documents</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          {/* Project Selection */}
-          <select
-            value={selectedProjectId || ''}
-            onChange={(e) => setSelectedProjectId(e.target.value || null)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
-          >
-            <option value="">General Chat (No Project)</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name} ({project.document_count} docs)
-              </option>
-            ))}
-          </select>
+  const getConnectionStatusIcon = () => {
+    switch (connectionStatus) {
+      case 'connected': return <Zap className="w-4 h-4" />
+      case 'disconnected': return <WifiOff className="w-4 h-4" />
+      default: return <Loader2 className="w-4 h-4 animate-spin" />
+    }
+  }
 
-          {/* Connection Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={testConnection}
-              className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
-              title="Test Connection"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            
-            <button
-              onClick={clearChat}
-              className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
-              title="Clear Chat"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-
-            {/* Connection Status */}
-            <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-              connectionStatus === 'connected' 
-                ? 'bg-green-100 text-green-700' 
-                : connectionStatus === 'disconnected'
-                ? 'bg-red-100 text-red-700'
-                : 'bg-yellow-100 text-yellow-700'
-            }`}>
-              <div className={`w-2 h-2 rounded-full ${
-                connectionStatus === 'connected' 
-                  ? 'bg-green-500' 
-                  : connectionStatus === 'disconnected'
-                  ? 'bg-red-500'
-                  : 'bg-yellow-500'
-              }`} />
-              {connectionStatus === 'connected' ? 'Connected' : 
-               connectionStatus === 'disconnected' ? 'Disconnected' : 'Checking...'}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-
-  // Message Component
-  const MessageComponent: React.FC<{ message: any }> = ({ message }) => {
+  const renderMessage = (message: any, index: number) => {
     const isUser = message.role === 'user'
     const isError = message.role === 'error'
+    const isAssistant = message.role === 'assistant'
 
     return (
       <motion.div
+        key={message.id}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className={`flex gap-4 p-4 rounded-lg ${
-          isUser ? 'bg-blue-50' : isError ? 'bg-red-50' : 'bg-white'
-        }`}
+        transition={{ duration: 0.3, delay: index * 0.1 }}
+        className={`flex gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}
       >
-        {/* Avatar */}
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0 ${
-          isUser ? 'bg-blue-500' : isError ? 'bg-red-500' : 'bg-gray-700'
-        }`}>
-          {isUser ? <User className="w-4 h-4" /> : isError ? <AlertCircle className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 space-y-2 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-sm text-gray-900">
-              {isUser ? 'You' : isError ? 'Error' : 'Assistant'}
-            </span>
-            <span className="text-xs text-gray-500">
-              {new Date(message.timestamp).toLocaleTimeString()}
-            </span>
+        <div className={`flex gap-3 max-w-3xl ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+          {/* Avatar */}
+          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+            isUser ? 'bg-blue-600' : isError ? 'bg-red-600' : 'bg-green-600'
+          }`}>
+            {isUser ? (
+              <User className="w-4 h-4 text-white" />
+            ) : isError ? (
+              <AlertCircle className="w-4 h-4 text-white" />
+            ) : (
+              <Bot className="w-4 h-4 text-white" />
+            )}
           </div>
 
           {/* Message Content */}
-          <div className="prose prose-sm max-w-none">
-            <p className={`whitespace-pre-wrap break-words ${
-              isError ? 'text-red-800' : 'text-gray-800'
+          <div className={`flex-1 ${isUser ? 'text-right' : 'text-left'}`}>
+            <div className={`inline-block p-4 rounded-2xl ${
+              isUser 
+                ? 'bg-blue-600 text-white' 
+                : isError 
+                ? 'bg-red-50 text-red-800 border border-red-200'
+                : 'bg-gray-100 text-gray-900'
             }`}>
-              {message.content}
-            </p>
-          </div>
-
-          {/* Sources */}
-          {message.sources && message.sources.length > 0 && (
-            <div className="mt-3 space-y-2">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <FileText className="w-4 h-4" />
-                <span>Found {message.sources.length} relevant sources</span>
+              {/* Message Text */}
+              <div className="whitespace-pre-wrap break-words">
+                {message.content}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {message.sources.slice(0, 4).map((source: any, idx: number) => (
-                  <div key={idx} className="text-xs bg-blue-50 border border-blue-200 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Database className="w-3 h-3 text-blue-600" />
-                      <span className="font-medium text-blue-800">
-                        {source.filename || source.name || `Document ${idx + 1}`}
-                      </span>
-                      {source.relevance_score && (
-                        <span className="text-blue-600 bg-blue-100 px-1 rounded">
-                          {Math.round(source.relevance_score * 100)}%
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-gray-700 line-clamp-2">
-                      {source.excerpt || source.content || 'Relevant content found'}
-                    </p>
+
+              {/* Sources (for assistant messages) */}
+              {isAssistant && message.sources && message.sources.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-600">
+                      Sources ({message.sources.length})
+                    </span>
                   </div>
-                ))}
-              </div>
-              {message.sources.length > 4 && (
-                <p className="text-xs text-gray-600">
-                  ... and {message.sources.length - 4} more sources
-                </p>
+                  <div className="space-y-2">
+                    {message.sources.map((source: any, idx: number) => (
+                      <div key={idx} className="text-sm bg-gray-50 rounded-lg p-2">
+                        <div className="font-medium text-gray-800">{source.filename}</div>
+                        <div className="text-gray-600 text-xs mt-1">
+                          Relevance: {Math.round(source.relevance_score * 100)}%
+                        </div>
+                        {source.excerpt && (
+                          <div className="text-gray-700 mt-1 text-xs">
+                            "{source.excerpt.substring(0, 100)}..."
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Intelligence Metadata */}
+              {isAssistant && message.intelligence_metadata && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm font-medium text-gray-600">AI Analysis</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="text-center bg-gray-50 rounded p-2">
+                      <div className="font-medium">Complexity</div>
+                      <div className="text-gray-600">{message.intelligence_metadata.query_complexity}</div>
+                    </div>
+                    <div className="text-center bg-gray-50 rounded p-2">
+                      <div className="font-medium">Reasoning</div>
+                      <div className="text-gray-600">{message.intelligence_metadata.reasoning_depth}</div>
+                    </div>
+                    <div className="text-center bg-gray-50 rounded p-2">
+                      <div className="font-medium">Context</div>
+                      <div className="text-gray-600">{message.intelligence_metadata.context_integration}</div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-          )}
 
-          {/* Intelligence Metadata */}
-          {message.intelligence_metadata && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
-              <Sparkles className="w-3 h-3" />
-              <span>
-                {message.intelligence_metadata.query_complexity} complexity • {message.intelligence_metadata.reasoning_depth} reasoning
+            {/* Message Actions */}
+            <div className={`flex items-center gap-2 mt-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
+              <span className="text-xs text-gray-500">
+                {message.timestamp.toLocaleTimeString()}
               </span>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 mt-2">
-            <button
-              onClick={() => copyMessage(message.id, message.content)}
-              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-            >
-              {copiedMessageId === message.id ? (
-                <Check className="w-3 h-3" />
-              ) : (
-                <Copy className="w-3 h-3" />
+              
+              {!isError && (
+                <button
+                  onClick={() => copyToClipboard(message.content, message.id)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded"
+                  title="Copy message"
+                >
+                  {copiedMessageId === message.id ? (
+                    <Check className="w-3 h-3 text-green-600" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </button>
               )}
-              {copiedMessageId === message.id ? 'Copied!' : 'Copy'}
-            </button>
+            </div>
           </div>
         </div>
       </motion.div>
     )
   }
 
+  // ===== MAIN RENDER =====
   return (
-    <div className="h-full flex flex-col bg-gray-50">
-      {/* Project Selector Header */}
-      <ProjectSelector />
+    <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-6 h-6 text-blue-600" />
+                <h1 className="text-xl font-semibold text-gray-900">RAG Chat</h1>
+              </div>
+              
+              {/* Connection Status */}
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${getConnectionStatusColor()}`}>
+                {getConnectionStatusIcon()}
+                <span className="font-medium">
+                  {connectionStatus === 'connected' ? 'Connected' :
+                   connectionStatus === 'disconnected' ? 'Disconnected' : 'Checking...'}
+                </span>
+              </div>
+            </div>
+
+            {/* Header Controls */}
+            <div className="flex items-center gap-2">
+              {/* Project Selector */}
+              <select
+                value={selectedProjectId || ''}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">No Project Selected</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name} ({project.document_count} docs)
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={refreshProjects}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Refresh projects"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+
+              {/* Chat Actions */}
+              <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
+                <button
+                  onClick={testConnection}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Test connection"
+                  disabled={connectionStatus === 'checking'}
+                >
+                  <Database className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={testAI}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Test AI service"
+                  disabled={isLoading}
+                >
+                  <Sparkles className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={retryLastMessage}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Retry last message"
+                  disabled={isLoading || messages.length === 0}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={clearChat}
+                  className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                  title="Clear chat"
+                  disabled={isLoading || messages.length === 0}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats Bar */}
+          {stats.totalMessages > 0 && (
+            <div className="mt-3 flex items-center gap-6 text-sm text-gray-600">
+              <div className="flex items-center gap-1">
+                <MessageSquare className="w-4 h-4" />
+                <span>{stats.totalMessages} messages</span>
+              </div>
+              {stats.totalSources > 0 && (
+                <div className="flex items-center gap-1">
+                  <FileText className="w-4 h-4" />
+                  <span>{stats.totalSources} sources found</span>
+                </div>
+              )}
+              {stats.lastActivity && (
+                <div className="flex items-center gap-1">
+                  <History className="w-4 h-4" />
+                  <span>Last: {stats.lastActivity.toLocaleTimeString()}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-hidden relative">
-        <div className="h-full overflow-y-auto pb-32" ref={messagesEndRef}>
-          <div className="max-w-4xl mx-auto p-4 space-y-4">
-            {/* Welcome Message */}
-            {messages.length === 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-center py-12"
-              >
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
-                  <MessageSquare className="w-8 h-8 text-white" />
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto">
+          <div className="container mx-auto px-4 py-6">
+            {messages.length === 0 ? (
+              /* Empty State */
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="bg-white rounded-2xl p-8 shadow-lg max-w-md">
+                  <Bot className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    Welcome to RAG Chat!
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    Ask questions about your documents and get AI-powered answers with source citations.
+                  </p>
+                  <div className="space-y-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      <span>Upload documents to get started</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Database className="w-4 h-4" />
+                      <span>Select a project for context</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      <span>Ask natural language questions</span>
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Welcome to RagFlow Chat
-                </h3>
-                <p className="text-gray-600 max-w-lg mx-auto mb-6">
-                  {selectedProjectId 
-                    ? "Ask questions about your documents and get AI-powered answers with source references."
-                    : "Select a project above to chat with your documents, or ask general questions."
-                  }
-                </p>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left max-w-lg mx-auto">
-                  <h4 className="font-medium text-blue-900 mb-2">💡 Tips for better results:</h4>
-                  <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• Be specific in your questions</li>
-                    <li>• Ask about document content for source-backed answers</li>
-                    <li>• Use follow-up questions for deeper insights</li>
-                  </ul>
-                </div>
-              </motion.div>
+              </div>
+            ) : (
+              /* Messages */
+              <div className="space-y-6 pb-6">
+                <AnimatePresence mode="popLayout">
+                  {messages.map((message, index) => renderMessage(message, index))}
+                </AnimatePresence>
+                
+                {/* Loading Indicator */}
+                {isLoading && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex gap-4 justify-start"
+                  >
+                    <div className="flex gap-3 max-w-3xl">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-600 flex items-center justify-center">
+                        <Bot className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="bg-gray-100 rounded-2xl p-4">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
+                          <span className="text-gray-600">AI is thinking...</span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+                
+                <div ref={messagesEndRef} />
+              </div>
             )}
-
-            {/* Messages */}
-            <AnimatePresence>
-              {messages.map((message) => (
-                <MessageComponent key={message.id} message={message} />
-              ))}
-            </AnimatePresence>
           </div>
         </div>
-
-        {/* Connection Warning */}
-        {connectionStatus === 'disconnected' && (
-          <div className="absolute top-4 left-4 right-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
-            <WifiOff className="w-5 h-5 text-red-600" />
-            <div className="flex-1">
-              <p className="text-red-800 font-medium">Backend Disconnected</p>
-              <p className="text-red-600 text-sm">Please check your connection and restart the server.</p>
-            </div>
-            <button
-              onClick={testConnection}
-              className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Input Area */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex gap-3 items-end">
-            {/* Text Input */}
-            <div className="flex-1 relative">
+      <div className="bg-white border-t border-gray-200 shadow-lg">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={handleInputChange}
+                onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder={
-                  connectionStatus === 'disconnected' 
-                    ? "Backend disconnected - please check connection" 
-                    : selectedProjectId 
-                      ? "Ask a question about your documents..." 
-                      : "Ask a question (select a project for document-specific answers)..."
+                  selectedProjectId 
+                    ? "Ask a question about your documents..." 
+                    : "Select a project and ask a question..."
                 }
                 disabled={isLoading || connectionStatus === 'disconnected'}
-                className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 pr-16 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                rows={1}
-                style={{ minHeight: '44px', maxHeight: '120px' }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                rows={Math.min(Math.max(input.split('\n').length, 1), 4)}
+                maxLength={1000}
               />
-              
-              {/* Character count */}
-              <div className="absolute bottom-2 right-2 text-xs text-gray-400">
-                {input.length}/1000
+              <div className="flex justify-between items-center mt-2">
+                <div className="text-xs text-gray-500">
+                  {input.length}/1000 characters
+                </div>
+                <div className="text-xs text-gray-500">
+                  Press Enter to send, Shift+Enter for new line
+                </div>
               </div>
             </div>
-
-            {/* Send Button */}
-            <button
-              onClick={handleSendMessage}
-              disabled={!input.trim() || input.length > 1000 || isLoading || connectionStatus === 'disconnected'}
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 shadow-sm ${
-                isLoading 
-                  ? 'bg-gray-100 text-gray-400' 
-                  : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-md hover:shadow-lg'
-              }`}
-            >
+            
+            <div className="flex gap-2">
               {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Sending...</span>
-                </div>
+                <button
+                  onClick={stopGeneration}
+                  className="px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2"
+                >
+                  <StopCircle className="w-4 h-4" />
+                  Stop
+                </button>
               ) : (
-                <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!input.trim() || connectionStatus === 'disconnected'}
+                  className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                >
                   <Send className="w-4 h-4" />
-                  <span>Send</span>
-                </div>
+                  Send
+                </button>
               )}
-            </button>
-          </div>
-
-          {/* Input Hints */}
-          <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-            <div className="flex items-center gap-4">
-              {connectionStatus === 'connected' && (
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span>Backend connected</span>
-                </div>
-              )}
-              {selectedProjectId && (
-                <div className="flex items-center gap-1">
-                  <FileText className="w-3 h-3" />
-                  <span>Using project: {projects.find(p => p.id === selectedProjectId)?.name}</span>
-                </div>
-              )}
-              <span>💡 Be specific for better results</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Enter</kbd>
-              <span>to send</span>
-              <span>•</span>
-              <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Shift+Enter</kbd>
-              <span>for new line</span>
             </div>
           </div>
-
-          {/* AI Status Indicator */}
-          {connectionStatus === 'connected' && (
-            <div className="mt-2 flex items-center justify-center">
-              <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                <span>AI Ready</span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

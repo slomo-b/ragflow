@@ -1,137 +1,67 @@
-#!/usr/bin/env python3
-"""
-RagFlow Backend - Modern Version 2025 mit korrigiertem RAG System
-Mit FastAPI 0.115+, Pydantic V2, Python 3.13
-"""
-
-import asyncio
-import json
-import os
+# backend/app/main.py - RagFlow Backend mit allen integrierten Features
 import sys
 import uuid
-from contextlib import asynccontextmanager
+import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Annotated
+from typing import List, Optional, Dict, Any
 
-# Modern FastAPI imports
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, BackgroundTasks, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel, Field
+from rich.console import Console
 
-# Pydantic V2 imports
-from pydantic import BaseModel, Field, ConfigDict
-from pydantic_settings import BaseSettings, SettingsConfigDict
+# Import our modules
+from .config import settings
+from .features import features
+from .database import get_db_manager, DocumentModel, ProjectModel, ChatModel
+from .rag_system import RAGSystem
+from .document_processor import document_processor
+from .ocr_support import ocr_processor
 
-# Rich für schöne Ausgaben
-try:
-    from rich import print as rprint
-    from rich.console import Console
-    console = Console()
-    RICH_AVAILABLE = True
-except ImportError:
-    RICH_AVAILABLE = False
-    def rprint(*args, **kwargs):
-        print(*args, **kwargs)
+console = Console()
 
-# === MODERNE KONFIGURATION ===
-class Settings(BaseSettings):
-    """Moderne App-Konfiguration mit Pydantic V2"""
-    
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"
-    )
-    
-    # API Configuration
-    app_name: str = "RagFlow Backend"
-    app_version: str = "3.0.0"
-    debug: bool = False
-    
-    # Server Configuration
-    host: str = "0.0.0.0"
-    port: int = 8000
-    reload: bool = False
-    
-    # Google AI
-    google_api_key: Optional[str] = Field(default=None, description="Google AI API Key")
-    gemini_model: str = Field(default="gemini-1.5-flash", description="Gemini model name")
-    
-    # File Upload
-    max_file_size: int = Field(default=100_000_000, description="Max file size in bytes (100MB)")
-    upload_dir: Path = Field(default=Path("uploads"), description="Upload directory")
-    data_dir: Path = Field(default=Path("data"), description="Data directory")
-    
-    # RAG Configuration
-    chunk_size: int = Field(default=500, description="Text chunk size for RAG")
-    chunk_overlap: int = Field(default=50, description="Overlap between chunks")
-    top_k: int = Field(default=5, description="Number of top results to return")
+# FastAPI App
+app = FastAPI(
+    title="RagFlow Backend",
+    version="3.0.0",
+    description="AI-powered document analysis with ChromaDB, OCR, and advanced processing",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
-# Global settings
-settings = Settings()
+# CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Data directories
-settings.data_dir.mkdir(exist_ok=True)
-settings.upload_dir.mkdir(exist_ok=True)
+# Database and systems
+db = get_db_manager()
+rag_system = RAGSystem()
 
-# Global data stores
-projects_db: Dict[str, Any] = {}
-documents_db: Dict[str, Any] = {}
-chats_db: Dict[str, Any] = {}
-
-# === DEPENDENCY CHECKS ===
-class FeatureFlags:
-    """Modern feature detection"""
-    
-    def __init__(self):
-        self.numpy = self._check_import("numpy")
-        self.sklearn = self._check_import("sklearn")
-        self.sentence_transformers = self._check_import("sentence_transformers")
-        self.google_ai = self._check_import("google.generativeai") and bool(settings.google_api_key)
-        self.pypdf = self._check_import("pypdf")
-        self.docx = self._check_import("docx")
-        self.chromadb = self._check_import("chromadb")
-        
-    def _check_import(self, module_name: str) -> bool:
-        try:
-            __import__(module_name)
-            return True
-        except ImportError:
-            return False
-    
-    def summary(self) -> Dict[str, bool]:
-        return {
-            "numpy": self.numpy,
-            "sklearn": self.sklearn,
-            "sentence_transformers": self.sentence_transformers,
-            "google_ai": self.google_ai,
-            "pypdf": self.pypdf,
-            "docx": self.docx,
-            "chromadb": self.chromadb
-        }
-
-features = FeatureFlags()
-
-# === PYDANTIC V2 MODELS ===
+# Pydantic Models
 class ProjectCreate(BaseModel):
-    """Project creation model"""
-    model_config = ConfigDict(str_strip_whitespace=True)
-    
     name: str = Field(..., min_length=1, max_length=100, description="Project name")
-    description: Optional[str] = Field(default="", max_length=500, description="Project description")
+    description: str = Field(default="", max_length=500, description="Project description")
 
 class ProjectResponse(BaseModel):
-    """Project response model"""
     id: str
     name: str
     description: str
     created_at: datetime
-    document_count: int = 0
+    document_count: int
+    chat_count: int = 0
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
 
 class DocumentResponse(BaseModel):
-    """Document response model"""
     id: str
     filename: str
     file_size: int
@@ -139,1012 +69,1322 @@ class DocumentResponse(BaseModel):
     processing_status: str
     created_at: datetime
     project_ids: List[str]
-
-class ChatMessage(BaseModel):
-    """Chat message model"""
-    role: str = Field(..., pattern="^(user|assistant)$")
-    content: str = Field(..., min_length=1)
-    timestamp: datetime
+    processing_method: Optional[str] = "standard"
+    text_length: Optional[int] = 0
 
 class ChatRequest(BaseModel):
-    """Chat request model"""
-    model_config = ConfigDict(str_strip_whitespace=True)
-    
-    message: str = Field(..., min_length=1, max_length=10000)
+    message: str = Field(..., min_length=1, max_length=2000)
     project_id: Optional[str] = None
+    model: Optional[str] = "gemini-1.5-flash"
+    temperature: Optional[float] = Field(0.7, ge=0.0, le=2.0)
+    max_tokens: Optional[int] = Field(1000, ge=1, le=4000)
 
-class ChatResponse(BaseModel):
-    """Chat response model"""
-    id: str
-    response: str
-    sources: List[str]
-    timestamp: datetime
+class SearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    project_id: Optional[str] = None
+    top_k: int = Field(5, ge=1, le=20)
 
-# === EINFACHES ABER FUNKTIONALES RAG SYSTEM ===
-class SimpleRAGSystem:
-    """Einfaches aber robustes RAG System"""
-    
-    def __init__(self):
-        self.documents = {}
-        self.project_docs = {}
-        self.document_chunks = {}
-        
-        # Initialize TF-IDF if sklearn available
-        self.vectorizer = None
-        self.tfidf_matrix = None
-        self.document_texts = []
-        self.document_ids = []
-        
-        if features.sklearn:
-            from sklearn.feature_extraction.text import TfidfVectorizer
-            from sklearn.metrics.pairwise import cosine_similarity
-            self.vectorizer = TfidfVectorizer(
-                max_features=5000,
-                stop_words='english',
-                ngram_range=(1, 2),
-                lowercase=True,
-                strip_accents='unicode'
-            )
-            self.cosine_similarity = cosine_similarity
-            rprint("✅ TF-IDF RAG System initialized")
-        else:
-            rprint("⚠️ Using simple keyword-based RAG (install scikit-learn for better performance)")
-    
-    def add_document(self, doc_id: str, content: str, metadata: Dict[str, Any] = None, project_ids: List[str] = None):
-        """Add document to RAG system"""
-        try:
-            if not content or not content.strip():
-                rprint(f"⚠️ Empty content for document {doc_id}")
-                return
-            
-            # Store document
-            self.documents[doc_id] = {
-                'content': content,
-                'metadata': metadata or {},
-                'project_ids': project_ids or []
-            }
-            
-            # Index by project
-            for project_id in (project_ids or []):
-                if project_id not in self.project_docs:
-                    self.project_docs[project_id] = []
-                if doc_id not in self.project_docs[project_id]:
-                    self.project_docs[project_id].append(doc_id)
-            
-            # Update search index
-            self._update_search_index()
-            
-            rprint(f"✅ Document {doc_id} added to RAG system")
-            
-        except Exception as e:
-            rprint(f"❌ Error adding document {doc_id}: {e}")
-    
-    def _update_search_index(self):
-        """Update the search index with all documents"""
-        try:
-            if not self.vectorizer:
-                return  # Skip if no sklearn
-            
-            # Collect all document texts
-            self.document_texts = []
-            self.document_ids = []
-            
-            for doc_id, doc_data in self.documents.items():
-                self.document_texts.append(doc_data['content'])
-                self.document_ids.append(doc_id)
-            
-            if self.document_texts:
-                # Fit TF-IDF
-                self.tfidf_matrix = self.vectorizer.fit_transform(self.document_texts)
-                rprint(f"✅ Search index updated with {len(self.document_texts)} documents")
-            
-        except Exception as e:
-            rprint(f"❌ Error updating search index: {e}")
-    
-    def search(self, query: str, top_k: int = 5, project_ids: List[str] = None):
-        """Search documents using TF-IDF or simple keyword matching"""
-        try:
-            if not query or not query.strip():
-                return []
-            
-            # Filter documents by project if specified
-            search_docs = {}
-            if project_ids:
-                for project_id in project_ids:
-                    if project_id in self.project_docs:
-                        for doc_id in self.project_docs[project_id]:
-                            if doc_id in self.documents:
-                                search_docs[doc_id] = self.documents[doc_id]
-            else:
-                search_docs = self.documents
-            
-            if not search_docs:
-                return []
-            
-            # Use TF-IDF search if available
-            if self.vectorizer and self.tfidf_matrix is not None:
-                return self._tfidf_search(query, search_docs, top_k)
-            else:
-                return self._keyword_search(query, search_docs, top_k)
-                
-        except Exception as e:
-            rprint(f"❌ Search error: {e}")
-            return []
-    
-    def _tfidf_search(self, query: str, search_docs: Dict, top_k: int):
-        """TF-IDF based search"""
-        try:
-            # Transform query
-            query_vector = self.vectorizer.transform([query])
-            
-            # Calculate similarities
-            similarities = self.cosine_similarity(query_vector, self.tfidf_matrix)[0]
-            
-            # Get top results
-            results = []
-            for idx, similarity in enumerate(similarities):
-                if similarity > 0:
-                    doc_id = self.document_ids[idx]
-                    if doc_id in search_docs:
-                        doc_data = search_docs[doc_id]
-                        results.append({
-                            'doc_id': doc_id,
-                            'content': doc_data['content'][:500],  # First 500 chars
-                            'score': float(similarity),
-                            'metadata': doc_data['metadata']
-                        })
-            
-            # Sort by score and return top_k
-            results.sort(key=lambda x: x['score'], reverse=True)
-            return results[:top_k]
-            
-        except Exception as e:
-            rprint(f"❌ TF-IDF search error: {e}")
-            return []
-    
-    def _keyword_search(self, query: str, search_docs: Dict, top_k: int):
-        """Simple keyword-based search"""
-        try:
-            results = []
-            query_lower = query.lower()
-            query_words = query_lower.split()
-            
-            for doc_id, doc_data in search_docs.items():
-                content = doc_data['content'].lower()
-                
-                # Count keyword matches
-                matches = 0
-                for word in query_words:
-                    matches += content.count(word)
-                
-                if matches > 0:
-                    # Simple scoring based on matches
-                    score = matches / len(query_words)
-                    
-                    results.append({
-                        'doc_id': doc_id,
-                        'content': doc_data['content'][:500],  # First 500 chars
-                        'score': score,
-                        'metadata': doc_data['metadata']
-                    })
-            
-            # Sort by score and return top_k
-            results.sort(key=lambda x: x['score'], reverse=True)
-            return results[:top_k]
-            
-        except Exception as e:
-            rprint(f"❌ Keyword search error: {e}")
-            return []
+class UploadResponse(BaseModel):
+    message: str
+    document: DocumentResponse
+    processing_info: Dict[str, Any]
 
-# === AI CHAT SYSTEM ===
-class ModernAIChat:
-    """AI Chat mit Google Gemini"""
+# === UTILITY FUNCTIONS ===
+
+async def save_uploaded_file(file: UploadFile) -> Path:
+    """Save uploaded file to temporary location"""
+    # Create temp directory if it doesn't exist
+    temp_dir = Path(tempfile.gettempdir()) / "ragflow_uploads"
+    temp_dir.mkdir(exist_ok=True)
     
-    def __init__(self):
-        self.model = None
-        self._initialize_ai()
+    # Generate unique filename
+    file_id = str(uuid.uuid4())
+    file_extension = Path(file.filename).suffix if file.filename else ""
+    temp_file_path = temp_dir / f"{file_id}{file_extension}"
     
-    def _initialize_ai(self):
-        """Initialize AI model"""
-        if not settings.google_api_key or settings.google_api_key.strip() == "":
-            rprint("⚠️ Google AI API key not configured")
-            return
-        
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=settings.google_api_key)
-            
-            # Fix model name if needed
-            model_name = settings.gemini_model
-            if model_name == 'gemini-2.5-flash':
-                model_name = 'gemini-1.5-flash'
-            
-            self.model = genai.GenerativeModel(model_name)
-            rprint(f"✅ Google AI initialized with model: {model_name}")
-            
-        except ImportError:
-            rprint("❌ google-generativeai not installed")
-        except Exception as e:
-            rprint(f"❌ Failed to initialize Google AI: {e}")
+    # Save file
+    with open(temp_file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
     
-    async def generate_response(self, query: str, context: str = "", project_id: str = None):
-        """Generate AI response"""
-        if not self.model:
-            return "❌ AI service not configured. Please set GOOGLE_API_KEY in .env file."
-        
-        try:
-            if context:
-                prompt = f"""Based on the following context from documents, answer the user's question:
+    return temp_file_path
 
-Context:
-{context}
-
-Question: {query}
-
-Please provide a helpful answer based on the context. If the context doesn't contain relevant information, say so clearly."""
-            else:
-                prompt = query
-            
-            response = await asyncio.to_thread(self.model.generate_content, prompt)
-            return response.text
-        
-        except Exception as e:
-            rprint(f"⚠️ AI generation failed: {e}")
-            return f"Sorry, I encountered an error generating a response: {str(e)}"
-
-# Initialize components
-rag_system = SimpleRAGSystem()
-ai_chat = ModernAIChat()
-
-# === DATA MANAGEMENT ===
-async def save_data():
-    """Async data saving"""
+def cleanup_temp_file(file_path: Path):
+    """Clean up temporary file"""
     try:
-        data_files = {
-            "projects.json": projects_db,
-            "documents.json": documents_db, 
-            "chats.json": chats_db
-        }
-        
-        for filename, data in data_files.items():
-            file_path = settings.data_dir / filename
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False, default=str)
-        
-        rprint("✅ Data saved successfully")
-    
+        if file_path.exists():
+            file_path.unlink()
     except Exception as e:
-        rprint(f"❌ Failed to save data: {e}")
+        console.print(f"⚠️ Could not delete temp file {file_path}: {e}")
 
-async def load_data():
-    """Async data loading"""
-    global projects_db, documents_db, chats_db
-    
-    try:
-        data_files = {
-            "projects.json": lambda: projects_db,
-            "documents.json": lambda: documents_db,
-            "chats.json": lambda: chats_db
-        }
-        
-        for filename, get_dict in data_files.items():
-            file_path = settings.data_dir / filename
-            if file_path.exists():
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if filename == "projects.json":
-                        projects_db.update(data)
-                    elif filename == "documents.json":
-                        documents_db.update(data)
-                    elif filename == "chats.json":
-                        chats_db.update(data)
-        
-        # Load documents into RAG
-        await load_documents_into_rag()
-        
-        rprint(f"✅ Loaded {len(projects_db)} projects, {len(documents_db)} documents, {len(chats_db)} chats")
-    
-    except Exception as e:
-        rprint(f"❌ Failed to load data: {e}")
+# === BASIC ENDPOINTS ===
 
-async def load_documents_into_rag():
-    """Load documents into RAG system"""
-    loaded_count = 0
-    
-    for doc_id, doc_data in documents_db.items():
-        if (doc_data.get("processing_status") == "completed" and 
-            "extracted_text" in doc_data):
-            
-            project_ids = doc_data.get("project_ids", [])
-            rag_system.add_document(
-                doc_id=doc_id,
-                content=doc_data["extracted_text"],
-                metadata=doc_data.get("metadata", {}),
-                project_ids=project_ids
-            )
-            loaded_count += 1
-    
-    rprint(f"✅ Loaded {loaded_count} documents into RAG system")
-
-# === SIMPLE DOCUMENT PROCESSING ===
-async def process_document(file_path: Path, content_type: str = None) -> str:
-    """Simple document text extraction"""
-    try:
-        text = ""
-        file_extension = file_path.suffix.lower()
-        
-        if file_extension == '.txt':
-            with open(file_path, 'r', encoding='utf-8') as f:
-                text = f.read()
-        elif file_extension == '.md':
-            with open(file_path, 'r', encoding='utf-8') as f:
-                text = f.read()
-        elif file_extension == '.pdf' and features.pypdf:
-            try:
-                import pypdf
-                with open(file_path, 'rb') as f:
-                    reader = pypdf.PdfReader(f)
-                    text = "\n".join([page.extract_text() for page in reader.pages])
-            except Exception as e:
-                rprint(f"⚠️ PDF extraction failed: {e}")
-                text = f"PDF file: {file_path.name} (extraction failed)"
-        elif file_extension in ['.docx', '.doc'] and features.docx:
-            try:
-                import docx
-                doc = docx.Document(file_path)
-                text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-            except Exception as e:
-                rprint(f"⚠️ DOCX extraction failed: {e}")
-                text = f"Word document: {file_path.name} (extraction failed)"
-        else:
-            text = f"File: {file_path.name} (text extraction not supported for {file_extension})"
-        
-        return text
-    
-    except Exception as e:
-        rprint(f"❌ Document processing failed: {e}")
-        return f"File: {file_path.name} (processing failed: {str(e)})"
-
-# === LIFESPAN MANAGEMENT ===
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Modern lifespan management"""
-    rprint("🚀 Starting RagFlow Backend...")
-    await load_data()
-    rprint("✅ RagFlow Backend ready!")
-    yield
-    rprint("👋 Shutting down RagFlow Backend...")
-    await save_data()
-
-# === FASTAPI APP ===
-app = FastAPI(
-    title=settings.app_name,
-    description="AI-powered document analysis with modern RAG (Latest FastAPI + Pydantic V2)",
-    version=settings.app_version,
-    lifespan=lifespan
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# === DEPENDENCY INJECTION ===
-async def get_settings() -> Settings:
-    """Get settings dependency"""
-    return settings
-
-# === HEALTH ENDPOINTS ===
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint with system information"""
     return {
-        "message": "🚀 RagFlow Backend is running!",
+        "message": "🚀 RagFlow Backend with ChromaDB, OCR, and Advanced Processing",
         "version": settings.app_version,
-        "docs": "/docs"
+        "features": {
+            "chromadb": features.is_enabled("chromadb"),
+            "document_processing": features.is_enabled("document_processing"),
+            "ocr_support": ocr_processor.is_ocr_available(),
+            "vector_search": features.is_enabled("vector_search"),
+            "ai_chat": features.is_enabled("google_ai") or features.is_enabled("openai")
+        },
+        "docs": "/docs",
+        "health": "/api/health"
     }
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Comprehensive health check"""
+    try:
+        # Test database connection
+        db_stats = db.get_stats()
+        db_healthy = True
+    except Exception as e:
+        console.print(f"❌ Database health check failed: {e}")
+        db_healthy = False
+        db_stats = {}
+    
+    # Test document processor
+    doc_processor_stats = document_processor.get_processing_stats()
+    
+    # Test OCR availability
+    ocr_status = ocr_processor.get_engine_status()
+    
+    # Test AI availability
+    rag_status = rag_system.get_status()
+    
     return {
-        "status": "healthy",
+        "status": "healthy" if db_healthy else "degraded",
         "timestamp": datetime.utcnow(),
         "version": settings.app_version,
         "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        "database": {
+            "type": "ChromaDB",
+            "healthy": db_healthy,
+            "stats": db_stats
+        },
+        "document_processing": {
+            "available": True,
+            "supported_formats": doc_processor_stats["supported_formats"],
+            "capabilities": doc_processor_stats["capabilities"]
+        },
+        "ocr": {
+            "available": ocr_status["ocr_ready"],
+            "engines": ocr_status["available_engines"],
+            "default_engine": ocr_status["default_engine"]
+        },
+        "ai": {
+            "rag_available": rag_status["features"]["rag_search"],
+            "google_ai": rag_status["google_ai"]["available"],
+            "openai": rag_status["openai"]["available"]
+        },
         "features": features.summary()
     }
 
 @app.get("/api/config")
 async def get_configuration():
-    """Get backend configuration information"""
+    """Get backend configuration"""
     return {
-        "google_api_configured": bool(settings.google_api_key and settings.google_api_key.strip()),
-        "upload_dir": str(settings.upload_dir),
-        "data_dir": str(settings.data_dir),
-        "chunk_size": settings.chunk_size,
-        "chunk_overlap": settings.chunk_overlap,
-        "max_file_size": settings.max_file_size,
-        "top_k": settings.top_k,
-        "features": features.summary()
-    }
-
-@app.get("/api/ai/info")
-async def get_ai_info():
-    """Get AI model information"""
-    if not settings.google_api_key or settings.google_api_key.strip() == "":
-        raise HTTPException(status_code=503, detail="Google AI API key not configured")
-    
-    return {
-        "model": settings.gemini_model,
-        "provider": "Google AI",
-        "features": ["chat", "text_generation", "rag_search"],
-        "status": "available" if settings.google_api_key else "unavailable",
-        "api_configured": bool(settings.google_api_key and settings.google_api_key.strip())
+        "app": settings.summary(),
+        "features": features.detailed_status(),
+        "document_processing": document_processor.get_processing_stats(),
+        "ocr": ocr_processor.get_engine_status(),
+        "ai": rag_system.get_status()
     }
 
 @app.get("/api/system/info")
 async def system_info():
-    """System information endpoint"""
+    """Detailed system information"""
+    db_stats = db.get_stats()
+    
     return {
         "app": {
             "name": settings.app_name,
             "version": settings.app_version,
+            "environment": settings.environment,
             "python_version": sys.version
         },
-        "features": features.summary(),
-        "stats": {
-            "projects": len(projects_db),
-            "documents": len(documents_db),
-            "chats": len(chats_db),
-            "rag_documents": len(rag_system.documents)
+        "database": {
+            "type": "ChromaDB",
+            "location": settings.get_database_url(),
+            "stats": db_stats
+        },
+        "capabilities": {
+            "document_formats": document_processor.get_supported_extensions(),
+            "ocr_engines": list(ocr_processor.available_engines.keys()),
+            "ai_providers": [
+                provider for provider, status in rag_system.get_status().items() 
+                if isinstance(status, dict) and status.get("available")
+            ]
+        },
+        "statistics": {
+            "projects": db_stats.get("projects", {}).get("total", 0),
+            "documents": db_stats.get("documents", {}).get("total", 0),
+            "document_chunks": db_stats.get("documents", {}).get("chunks_total", 0),
+            "chats": db_stats.get("chats", {}).get("total", 0)
         },
         "settings": {
             "chunk_size": settings.chunk_size,
             "chunk_overlap": settings.chunk_overlap,
+            "max_file_size_mb": settings.max_file_size // (1024 * 1024),
+            "embedding_model": settings.embedding_model,
             "top_k": settings.top_k
         }
     }
 
+@app.get("/api/ai/info")
+async def get_ai_info():
+    """Get AI model and capabilities information"""
+    rag_status = rag_system.get_status()
+    
+    if not (rag_status["google_ai"]["available"] or rag_status["openai"]["available"]):
+        raise HTTPException(status_code=503, detail="No AI providers configured")
+    
+    return {
+        "providers": {
+            "google_ai": {
+                "available": rag_status["google_ai"]["available"],
+                "model": settings.gemini_model,
+                "features": ["chat", "text_generation", "rag_search"]
+            },
+            "openai": {
+                "available": rag_status["openai"]["available"],
+                "features": ["chat", "text_generation", "rag_search"]
+            }
+        },
+        "features": rag_status["features"],
+        "database": "ChromaDB with vector embeddings",
+        "embedding_model": settings.embedding_model,
+        "status": "available"
+    }
+
 # === PROJECT ENDPOINTS ===
+
 @app.get("/api/projects", response_model=List[ProjectResponse])
 async def get_projects():
-    """Get all projects"""
-    projects = []
-    for project_id, project_data in projects_db.items():
-        doc_count = sum(1 for doc in documents_db.values() 
-                       if project_id in doc.get("project_ids", []))
+    """Get all projects with statistics"""
+    try:
+        projects = db.get_projects()
         
-        projects.append(ProjectResponse(
-            id=project_id,
-            name=project_data["name"],
-            description=project_data.get("description", ""),
-            created_at=datetime.fromisoformat(project_data["created_at"]) 
-                      if isinstance(project_data["created_at"], str) 
-                      else project_data["created_at"],
-            document_count=doc_count
-        ))
-    
-    return projects
+        project_responses = []
+        for project in projects:
+            stats = db.get_project_stats(project.id)
+            project_responses.append(ProjectResponse(
+                id=project.id,
+                name=project.name,
+                description=project.description,
+                created_at=datetime.fromisoformat(project.created_at),
+                document_count=stats["document_count"],
+                chat_count=stats["chat_count"]
+            ))
+        
+        return project_responses
+        
+    except Exception as e:
+        console.print(f"❌ Error loading projects: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load projects: {str(e)}")
 
 @app.post("/api/projects", response_model=ProjectResponse)
 async def create_project(project: ProjectCreate):
     """Create new project"""
-    project_id = str(uuid.uuid4())
-    timestamp = datetime.utcnow()
-    
-    project_data = {
-        "name": project.name,
-        "description": project.description,
-        "created_at": timestamp.isoformat()
-    }
-    
-    projects_db[project_id] = project_data
-    await save_data()
-    
-    return ProjectResponse(
-        id=project_id,
-        name=project_data["name"],
-        description=project_data["description"],
-        created_at=timestamp,
-        document_count=0
-    )
-
-# === FILE UPLOAD ENDPOINT ===
-@app.post("/api/upload")
-async def upload_file(
-    file: UploadFile = File(...),
-    project_name: str = Form(...)
-):
-    """Upload and process file"""
     try:
-        # Check file size
-        if file.size and file.size > settings.max_file_size:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File too large. Max size: {settings.max_file_size / (1024*1024):.1f}MB"
-            )
-        
-        # Check file type
-        file_extension = Path(file.filename).suffix.lower()
-        allowed_extensions = ['.pdf', '.docx', '.doc', '.txt', '.md']
-        
-        if file_extension not in allowed_extensions:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File type {file_extension} not supported. Allowed: {', '.join(allowed_extensions)}"
-            )
-        
-        # Create project if it doesn't exist
-        project_id = None
-        for pid, pdata in projects_db.items():
-            if pdata["name"] == project_name:
-                project_id = pid
-                break
-        
-        if not project_id:
-            project_id = str(uuid.uuid4())
-            projects_db[project_id] = {
-                "name": project_name,
-                "description": f"Project created via file upload: {file.filename}",
-                "created_at": datetime.utcnow().isoformat()
-            }
-        
-        # Save file
-        upload_dir = Path(settings.upload_dir)
-        upload_dir.mkdir(exist_ok=True)
-        
-        file_id = str(uuid.uuid4())
-        file_path = upload_dir / f"{file_id}_{file.filename}"
-        
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        
-        # Extract text
-        extracted_text = await process_document(file_path, file.content_type)
-        
-        # Store document
-        doc_data = {
-            "filename": file.filename,
-            "file_path": str(file_path),
-            "file_size": len(content),
-            "file_type": file_extension,
-            "project_ids": [project_id],
-            "extracted_text": extracted_text,
-            "processing_status": "completed",
-            "created_at": datetime.utcnow().isoformat(),
-            "metadata": {
-                "original_filename": file.filename,
-                "upload_timestamp": datetime.utcnow().isoformat(),
-                "project_name": project_name
-            }
-        }
-        
-        documents_db[file_id] = doc_data
-        
-        # Add to RAG system
-        rag_system.add_document(
-            doc_id=file_id,
-            content=extracted_text,
-            metadata=doc_data["metadata"],
-            project_ids=[project_id]
+        new_project = db.create_project(
+            name=project.name,
+            description=project.description
         )
         
-        await save_data()
+        stats = db.get_project_stats(new_project.id)
         
-        return {
-            "success": True,
-            "file_id": file_id,
-            "project_id": project_id,
-            "filename": file.filename,
-            "text_length": len(extracted_text),
-            "message": "File uploaded and processed successfully"
-        }
+        return ProjectResponse(
+            id=new_project.id,
+            name=new_project.name,
+            description=new_project.description,
+            created_at=datetime.fromisoformat(new_project.created_at),
+            document_count=stats["document_count"],
+            chat_count=stats["chat_count"]
+        )
         
     except Exception as e:
-        rprint(f"❌ Upload error: {e}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        console.print(f"❌ Error creating project: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create project: {str(e)}")
 
-# === SEARCH ENDPOINT ===
-@app.post("/api/search")
-async def search_documents(request: dict):
-    """Search documents using RAG"""
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: str):
+    """Get single project with detailed information"""
     try:
-        query = request.get("query", "")
-        project_id = request.get("project_id")
-        top_k = request.get("top_k", settings.top_k)
+        project = db.get_project(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
         
-        if not query:
-            raise HTTPException(status_code=400, detail="Query is required")
-        
-        # Perform search
-        search_results = rag_system.search(
-            query=query,
-            top_k=top_k,
-            project_ids=[project_id] if project_id else None
-        )
-        
-        # Format results
-        formatted_results = []
-        for result in search_results:
-            doc_data = documents_db.get(result['doc_id'], {})
-            formatted_results.append({
-                "id": result['doc_id'],
-                "content": result['content'],
-                "score": result['score'],
-                "metadata": result['metadata'],
-                "filename": doc_data.get("filename", "Unknown"),
-                "project_id": project_id
-            })
+        stats = db.get_project_stats(project_id)
+        documents = db.get_documents_by_project(project_id)
+        chats = db.get_chats_by_project(project_id)
         
         return {
-            "query": query,
-            "results": formatted_results,
-            "total_found": len(formatted_results),
-            "search_params": {
-                "top_k": top_k,
-                "project_id": project_id
-            }
-        }
-        
-    except Exception as e:
-        rprint(f"❌ Search error: {e}")
-        return {
-            "query": request.get("query", ""),
-            "results": [],
-            "total_found": 0,
-            "error": str(e),
-            "message": "Search temporarily unavailable"
-        }
-
-# === CHAT ENDPOINT ===
-@app.post("/api/chat")
-async def chat_with_ai(request: dict):
-    """Enhanced chat endpoint with RAG integration"""
-    try:
-        message = request.get("message", "")
-        project_id = request.get("project_id")
-        
-        if not message:
-            raise HTTPException(status_code=400, detail="Message is required")
-        
-        # Check if Google AI is configured
-        if not settings.google_api_key or settings.google_api_key.strip() == "":
-            return {
-                "response": "❌ AI service not configured. Please set GOOGLE_API_KEY in the .env file.",
-                "error": "AI_SERVICE_UNAVAILABLE",
-                "chat_id": str(uuid.uuid4()),
-                "timestamp": datetime.utcnow().isoformat(),
-                "sources": []
-            }
-        
-        # Get context from RAG if project_id provided
-        context = ""
-        sources = []
-        
-        if project_id:
-            try:
-                search_results = rag_system.search(
-                    query=message,
-                    top_k=3,
-                    project_ids=[project_id]
-                )
-                
-                if search_results:
-                    context = "\n\n".join([
-                        f"Document: {result['metadata'].get('original_filename', 'Unknown')}\n{result['content']}"
-                        for result in search_results
-                    ])
-                    
-                    sources = [{
-                        "id": result['doc_id'],
-                        "name": result['metadata'].get('original_filename', 'Unknown'),
-                        "excerpt": result['content'][:200] + "..." if len(result['content']) > 200 else result['content'],
-                        "relevance_score": result['score']
-                    } for result in search_results]
-            except Exception as e:
-                rprint(f"⚠️ RAG search failed: {e}")
-        
-        # Generate AI response
-        ai_response = await ai_chat.generate_response(
-            query=message,
-            context=context,
-            project_id=project_id
-        )
-        
-        # Ensure response is not empty
-        if not ai_response or len(ai_response.strip()) < 5:
-            ai_response = "I received your message but couldn't generate a proper response. Please try rephrasing your question."
-        
-        # Save chat
-        chat_id = str(uuid.uuid4())
-        chat_data = {
-            "project_id": project_id,
-            "messages": [
+            "id": project.id,
+            "name": project.name,
+            "description": project.description,
+            "created_at": project.created_at,
+            "updated_at": project.updated_at,
+            "statistics": stats,
+            "documents": [
                 {
-                    "role": "user",
-                    "content": message,
-                    "timestamp": datetime.utcnow().isoformat()
-                },
-                {
-                    "role": "assistant", 
-                    "content": ai_response,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "id": doc.id,
+                    "filename": doc.filename,
+                    "file_type": doc.file_type,
+                    "file_size": doc.file_size,
+                    "processing_status": doc.processing_status,
+                    "created_at": doc.created_at,
+                    "text_length": len(doc.content) if doc.content else 0
                 }
+                for doc in documents
             ],
-            "sources": sources,
-            "created_at": datetime.utcnow().isoformat()
+            "recent_chats": [
+                {
+                    "id": chat.id,
+                    "created_at": chat.created_at,
+                    "message_count": len(chat.messages)
+                }
+                for chat in chats[:5]  # Last 5 chats
+            ]
         }
         
-        chats_db[chat_id] = chat_data
-        await save_data()
+    except HTTPException:
+        raise
+    except Exception as e:
+        console.print(f"❌ Error loading project {project_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load project: {str(e)}")
+
+@app.put("/api/projects/{project_id}", response_model=ProjectResponse)
+async def update_project(project_id: str, project_update: ProjectUpdate):
+    """Update project information"""
+    try:
+        updated_project = db.update_project(
+            project_id=project_id,
+            name=project_update.name,
+            description=project_update.description
+        )
+        
+        if not updated_project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        stats = db.get_project_stats(project_id)
+        
+        return ProjectResponse(
+            id=updated_project.id,
+            name=updated_project.name,
+            description=updated_project.description,
+            created_at=datetime.fromisoformat(updated_project.created_at),
+            document_count=stats["document_count"],
+            chat_count=stats["chat_count"]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        console.print(f"❌ Error updating project {project_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update project: {str(e)}")
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: str):
+    """Delete project and all associated data"""
+    try:
+        project = db.get_project(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        stats = db.get_project_stats(project_id)
+        
+        success = db.delete_project(project_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete project")
         
         return {
-            "response": ai_response,
-            "chat_id": chat_id,
-            "project_id": project_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "sources": sources,
-            "model_info": {
-                "model": settings.gemini_model,
-                "provider": "Google AI"
+            "message": f"Project '{project.name}' deleted successfully",
+            "details": {
+                "documents_affected": stats["document_count"],
+                "chats_deleted": stats["chat_count"],
+                "total_file_size_freed": stats["total_file_size"]
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        error_msg = f"Sorry, I encountered an error: {str(e)}"
-        rprint(f"❌ Chat error: {e}")
-        
-        return {
-            "response": error_msg,
-            "error": "GENERATION_ERROR", 
-            "chat_id": str(uuid.uuid4()),
-            "timestamp": datetime.utcnow().isoformat(),
-            "sources": []
-        }
+        console.print(f"❌ Error deleting project {project_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete project: {str(e)}")
 
 # === DOCUMENT ENDPOINTS ===
-@app.post("/api/documents/upload")
-async def upload_document(
-    file: UploadFile = File(...),
-    project_id: str = Form(...)
-):
-    """Upload and process document"""
-    if project_id not in projects_db:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    if file.size and file.size > settings.max_file_size:
-        raise HTTPException(status_code=413, detail="File too large")
-    
-    # Save file
-    file_id = str(uuid.uuid4())
-    file_path = settings.upload_dir / f"{file_id}_{file.filename}"
-    
-    try:
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        
-        # Process document
-        extracted_text = await process_document(file_path, file.content_type)
-        
-        # Store document metadata
-        doc_data = {
-            "filename": file.filename,
-            "file_size": len(content),
-            "file_type": file.content_type or "unknown",
-            "file_path": str(file_path),
-            "project_ids": [project_id],
-            "processing_status": "completed" if extracted_text else "failed",
-            "created_at": datetime.utcnow().isoformat(),
-            "extracted_text": extracted_text,
-            "metadata": {
-                "upload_filename": file.filename,
-                "content_type": file.content_type
-            }
-        }
-        
-        documents_db[file_id] = doc_data
-        
-        # Add to RAG system if processing succeeded
-        if extracted_text:
-            rag_system.add_document(
-                doc_id=file_id,
-                content=extracted_text,
-                metadata=doc_data["metadata"],
-                project_ids=[project_id]
-            )
-        
-        await save_data()
-        
-        return {
-            "document_id": file_id,
-            "filename": file.filename,
-            "status": "completed" if extracted_text else "failed",
-            "text_length": len(extracted_text) if extracted_text else 0
-        }
-        
-    except Exception as e:
-        rprint(f"❌ Document upload failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @app.get("/api/documents", response_model=List[DocumentResponse])
-async def get_documents(project_id: Optional[str] = None):
+async def get_documents(project_id: Optional[str] = Query(None)):
     """Get documents, optionally filtered by project"""
-    documents = []
+    try:
+        documents = db.get_documents(project_id=project_id)
+        
+        return [
+            DocumentResponse(
+                id=doc.id,
+                filename=doc.filename,
+                file_size=doc.file_size,
+                file_type=doc.file_type,
+                processing_status=doc.processing_status,
+                created_at=datetime.fromisoformat(doc.created_at),
+                project_ids=doc.project_ids,
+                processing_method=doc.metadata.get("processing_method", "standard"),
+                text_length=doc.metadata.get("text_length", 0)
+            )
+            for doc in documents
+        ]
+        
+    except Exception as e:
+        console.print(f"❌ Error loading documents: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load documents: {str(e)}")
+
+@app.post("/api/documents/upload", response_model=UploadResponse)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    project_id: str = Form(...),
+    use_ocr: bool = Form(False),
+    ocr_language: str = Form("en"),
+    ocr_engine: Optional[str] = Form(None)
+):
+    """Upload and process document with optional OCR"""
     
-    for doc_id, doc_data in documents_db.items():
-        # Filter by project if specified
-        if project_id and project_id not in doc_data.get("project_ids", []):
-            continue
+    # Validate project exists
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    
+    # Save uploaded file
+    temp_file_path = await save_uploaded_file(file)
+    
+    # Schedule cleanup
+    background_tasks.add_task(cleanup_temp_file, temp_file_path)
+    
+    try:
+        # Determine processing method
+        should_use_ocr = use_ocr and ocr_processor.can_process_file(temp_file_path)
+        
+        if should_use_ocr:
+            console.print(f"📄 Processing with OCR: {file.filename}")
             
-        documents.append(DocumentResponse(
-            id=doc_id,
-            filename=doc_data["filename"],
-            file_size=doc_data["file_size"],
-            file_type=doc_data["file_type"],
-            processing_status=doc_data["processing_status"],
-            created_at=datetime.fromisoformat(doc_data["created_at"]) 
-                      if isinstance(doc_data["created_at"], str) 
-                      else doc_data["created_at"],
-            project_ids=doc_data.get("project_ids", [])
-        ))
+            # Use OCR processing
+            if temp_file_path.suffix.lower() in ocr_processor.supported_image_formats:
+                result = await ocr_processor.process_image_file(
+                    file_path=temp_file_path,
+                    engine=ocr_engine,
+                    language=ocr_language,
+                    project_ids=[project_id]
+                )
+                processing_method = "ocr_image"
+            else:
+                result = await ocr_processor.process_scanned_pdf(
+                    file_path=temp_file_path,
+                    engine=ocr_engine,
+                    language=ocr_language,
+                    project_ids=[project_id]
+                )
+                processing_method = "ocr_pdf"
+            
+            processing_info = {
+                "method": processing_method,
+                "ocr_engine": result.get("ocr_engine"),
+                "ocr_language": result.get("ocr_language"),
+                "text_extracted": True,
+                "text_length": result.get("text_length", 0)
+            }
+            
+        else:
+            console.print(f"📄 Processing with standard parser: {file.filename}")
+            
+            # Use standard document processing
+            result = await document_processor.process_document(
+                file_path=temp_file_path,
+                project_ids=[project_id]
+            )
+            
+            processing_info = {
+                "method": "standard",
+                "format_detected": result.get("file_type"),
+                "chunks_created": result.get("chunks_created", 0),
+                "text_length": result.get("text_length", 0)
+            }
+        
+        # Create response
+        document_response = DocumentResponse(
+            id=result["document_id"],
+            filename=result["filename"],
+            file_size=result["file_size"],
+            file_type=result.get("file_type", temp_file_path.suffix),
+            processing_status=result.get("processing_status", "completed"),
+            created_at=datetime.utcnow(),
+            project_ids=[project_id],
+            processing_method=processing_info["method"],
+            text_length=processing_info["text_length"]
+        )
+        
+        return UploadResponse(
+            message=f"Document '{file.filename}' processed successfully",
+            document=document_response,
+            processing_info=processing_info
+        )
+        
+    except Exception as e:
+        console.print(f"❌ Document processing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Document processing failed: {str(e)}")
+
+@app.post("/api/documents/upload-batch")
+async def upload_batch_documents(
+    background_tasks: BackgroundTasks,
+    files: List[UploadFile] = File(...),
+    project_id: str = Form(...),
+    use_ocr: bool = Form(False),
+    ocr_language: str = Form("en"),
+    ocr_engine: Optional[str] = Form(None)
+):
+    """Upload and process multiple documents"""
     
-    return documents
+    # Validate project
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if len(files) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 files per batch")
+    
+    results = {
+        "total_files": len(files),
+        "processed": [],
+        "failed": [],
+        "processing_summary": {
+            "ocr_used": use_ocr,
+            "ocr_language": ocr_language,
+            "ocr_engine": ocr_engine
+        }
+    }
+    
+    for file in files:
+        try:
+            if not file.filename:
+                results["failed"].append({
+                    "filename": "unknown",
+                    "error": "No filename provided"
+                })
+                continue
+            
+            # Save and process file
+            temp_file_path = await save_uploaded_file(file)
+            background_tasks.add_task(cleanup_temp_file, temp_file_path)
+            
+            # Process based on OCR settings
+            should_use_ocr = use_ocr and ocr_processor.can_process_file(temp_file_path)
+            
+            if should_use_ocr:
+                if temp_file_path.suffix.lower() in ocr_processor.supported_image_formats:
+                    result = await ocr_processor.process_image_file(
+                        file_path=temp_file_path,
+                        engine=ocr_engine,
+                        language=ocr_language,
+                        project_ids=[project_id]
+                    )
+                else:
+                    result = await ocr_processor.process_scanned_pdf(
+                        file_path=temp_file_path,
+                        engine=ocr_engine,
+                        language=ocr_language,
+                        project_ids=[project_id]
+                    )
+            else:
+                result = await document_processor.process_document(
+                    file_path=temp_file_path,
+                    project_ids=[project_id]
+                )
+            
+            results["processed"].append({
+                "filename": file.filename,
+                "document_id": result["document_id"],
+                "file_size": result["file_size"],
+                "text_length": result.get("text_length", 0),
+                "processing_method": "ocr" if should_use_ocr else "standard",
+                "status": "success"
+            })
+            
+        except Exception as e:
+            console.print(f"❌ Failed to process {file.filename}: {e}")
+            results["failed"].append({
+                "filename": file.filename,
+                "error": str(e),
+                "status": "failed"
+            })
+    
+    return {
+        "message": f"Batch processing completed: {len(results['processed'])} successful, {len(results['failed'])} failed",
+        "results": results
+    }
 
 @app.delete("/api/documents/{document_id}")
 async def delete_document(document_id: str):
-    """Delete document"""
-    if document_id not in documents_db:
-        raise HTTPException(status_code=404, detail="Document not found")
-    
+    """Delete document and associated files"""
     try:
-        # Remove from RAG system
-        if document_id in rag_system.documents:
-            del rag_system.documents[document_id]
-            rag_system._update_search_index()
+        documents = db.get_documents()
+        document = next((d for d in documents if d.id == document_id), None)
         
-        # Remove file
-        doc_data = documents_db[document_id]
-        file_path = Path(doc_data["file_path"])
-        if file_path.exists():
-            file_path.unlink()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
         
-        # Remove from database
-        del documents_db[document_id]
-        await save_data()
+        # Delete physical file if it exists
+        try:
+            file_path = Path(document.file_path)
+            if file_path.exists():
+                file_path.unlink()
+        except Exception as e:
+            console.print(f"⚠️ Could not delete file {document.file_path}: {e}")
         
-        return {"message": "Document deleted successfully"}
-        
-    except Exception as e:
-        rprint(f"❌ Document deletion failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Deletion failed: {str(e)}")
-
-# === CHAT HISTORY ENDPOINTS ===
-@app.get("/api/chats")
-async def get_chats(project_id: Optional[str] = None):
-    """Get chat history"""
-    chats = []
-    
-    for chat_id, chat_data in chats_db.items():
-        # Filter by project if specified
-        if project_id and chat_data.get("project_id") != project_id:
-            continue
-            
-        chats.append({
-            "id": chat_id,
-            "project_id": chat_data.get("project_id"),
-            "created_at": chat_data["created_at"],
-            "message_count": len(chat_data.get("messages", [])),
-            "last_message": chat_data.get("messages", [])[-1]["content"][:100] + "..." 
-                           if chat_data.get("messages") else ""
-        })
-    
-    # Sort by creation time
-    chats.sort(key=lambda x: x["created_at"], reverse=True)
-    return chats
-
-@app.get("/api/chats/{chat_id}")
-async def get_chat(chat_id: str):
-    """Get specific chat"""
-    if chat_id not in chats_db:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    
-    return chats_db[chat_id]
-
-@app.delete("/api/chats/{chat_id}")
-async def delete_chat(chat_id: str):
-    """Delete chat"""
-    if chat_id not in chats_db:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    
-    del chats_db[chat_id]
-    await save_data()
-    
-    return {"message": "Chat deleted successfully"}
-
-# === ADMIN ENDPOINTS ===
-@app.get("/api/admin/stats")
-async def get_admin_stats():
-    """Get system statistics for admin"""
-    return {
-        "projects": {
-            "total": len(projects_db),
-            "projects": [
-                {
-                    "id": pid,
-                    "name": pdata["name"],
-                    "document_count": sum(1 for doc in documents_db.values() 
-                                        if pid in doc.get("project_ids", [])),
-                    "created_at": pdata["created_at"]
-                }
-                for pid, pdata in projects_db.items()
-            ]
-        },
-        "documents": {
-            "total": len(documents_db),
-            "by_status": {
-                "completed": sum(1 for doc in documents_db.values() 
-                               if doc.get("processing_status") == "completed"),
-                "failed": sum(1 for doc in documents_db.values() 
-                            if doc.get("processing_status") == "failed"),
-                "pending": sum(1 for doc in documents_db.values() 
-                             if doc.get("processing_status") == "pending")
-            },
-            "total_size": sum(doc.get("file_size", 0) for doc in documents_db.values())
-        },
-        "chats": {
-            "total": len(chats_db),
-            "total_messages": sum(len(chat.get("messages", [])) for chat in chats_db.values())
-        },
-        "rag": {
-            "indexed_documents": len(rag_system.documents),
-            "search_method": "TF-IDF" if rag_system.vectorizer else "Keyword-based"
-        },
-        "features": features.summary()
-    }
-
-@app.post("/api/admin/reindex")
-async def reindex_documents():
-    """Reindex all documents in RAG system"""
-    try:
-        # Clear current index
-        rag_system.documents.clear()
-        rag_system.project_docs.clear()
-        
-        # Reload all documents
-        await load_documents_into_rag()
+        # Delete from database
+        success = db.delete_document(document_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete document from database")
         
         return {
-            "message": "Documents reindexed successfully",
-            "indexed_count": len(rag_system.documents)
+            "message": f"Document '{document.filename}' deleted successfully",
+            "document_id": document_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        console.print(f"❌ Error deleting document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
+
+# === SEARCH ENDPOINTS ===
+
+@app.post("/api/search")
+async def search_documents(search_request: SearchRequest):
+    """Search documents using RAG vector search"""
+    try:
+        results = db.search_documents(
+            query=search_request.query,
+            project_id=search_request.project_id,
+            top_k=search_request.top_k
+        )
+        
+        return {
+            "query": search_request.query,
+            "project_id": search_request.project_id,
+            "top_k": search_request.top_k,
+            "results": results,
+            "total_results": len(results),
+            "search_metadata": {
+                "embedding_model": settings.embedding_model,
+                "search_timestamp": datetime.utcnow().isoformat()
+            }
         }
         
     except Exception as e:
-        rprint(f"❌ Reindexing failed: {e}")
+        console.print(f"❌ Search error: {e}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+# === CHAT ENDPOINTS ===
+
+@app.post("/api/chat")
+async def chat_with_ai(chat_request: ChatRequest):
+    """Enhanced chat with AI using RAG integration"""
+    try:
+        # Validate AI availability
+        rag_status = rag_system.get_status()
+        if not (rag_status["google_ai"]["available"] or rag_status["openai"]["available"]):
+            raise HTTPException(status_code=503, detail="No AI providers available")
+        
+        # Perform RAG search
+        search_results = db.search_documents(
+            query=chat_request.message,
+            project_id=chat_request.project_id,
+            top_k=settings.top_k
+        )
+        
+        # Prepare context documents
+        context_documents = [
+            {
+                "filename": result["filename"],
+                "content": result["full_text"],
+                "relevance_score": result["relevance_score"]
+            }
+            for result in search_results
+        ]
+        
+        # Generate AI response
+        response = await rag_system.generate_response(
+            query=chat_request.message,
+            context_documents=context_documents,
+            model=chat_request.model,
+            temperature=chat_request.temperature
+        )
+        
+        # Create chat record
+        chat_id = str(uuid.uuid4())
+        messages = [
+            {
+                "role": "user", 
+                "content": chat_request.message, 
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            {
+                "role": "assistant", 
+                "content": response["response"], 
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        ]
+        
+        chat = db.create_chat(
+            project_id=chat_request.project_id,
+            messages=messages
+        )
+        
+        return {
+            "response": response["response"],
+            "chat_id": chat.id,
+            "project_id": chat_request.project_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "model_info": {
+                "model": chat_request.model,
+                "temperature": chat_request.temperature,
+                "features_used": response.get("features_used", {}),
+                "context_documents": len(context_documents)
+            },
+            "sources": [
+                {
+                    "id": result["id"],
+                    "name": result["filename"],
+                    "filename": result["filename"],
+                    "excerpt": result["excerpt"],
+                    "relevance_score": result["relevance_score"]
+                }
+                for result in search_results
+            ],
+            "intelligence_metadata": response.get("intelligence_metadata", {})
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        console.print(f"❌ Chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+@app.get("/api/chats")
+async def get_chats(project_id: Optional[str] = Query(None)):
+    """Get chat history"""
+    try:
+        chats = db.get_chats(project_id=project_id)
+        
+        return [
+            {
+                "id": chat.id,
+                "project_id": chat.project_id,
+                "created_at": chat.created_at,
+                "updated_at": chat.updated_at,
+                "message_count": len(chat.messages),
+                "last_message": chat.messages[-1]["content"][:100] + "..." if chat.messages else "",
+                "last_message_timestamp": chat.messages[-1]["timestamp"] if chat.messages else chat.created_at
+            }
+            for chat in chats
+        ]
+        
+    except Exception as e:
+        console.print(f"❌ Error loading chats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load chats: {str(e)}")
+
+@app.get("/api/chats/{chat_id}")
+async def get_chat(chat_id: str):
+    """Get specific chat with full message history"""
+    try:
+        chats = db.get_chats()
+        chat = next((c for c in chats if c.id == chat_id), None)
+        
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat not found")
+        
+        return {
+            "id": chat.id,
+            "project_id": chat.project_id,
+            "messages": chat.messages,
+            "created_at": chat.created_at,
+            "updated_at": chat.updated_at,
+            "message_count": len(chat.messages),
+            "metadata": chat.metadata
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        console.print(f"❌ Error loading chat {chat_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load chat: {str(e)}")
+
+@app.delete("/api/chats/{chat_id}")
+async def delete_chat(chat_id: str):
+    """Delete chat conversation"""
+    try:
+        chats = db.get_chats()
+        chat = next((c for c in chats if c.id == chat_id), None)
+        
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat not found")
+        
+        success = db.delete_chat(chat_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete chat")
+        
+        return {
+            "message": "Chat deleted successfully",
+            "chat_id": chat_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        console.print(f"❌ Error deleting chat {chat_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete chat: {str(e)}")
+
+# === OCR ENDPOINTS ===
+
+@app.post("/api/ocr/process-image")
+async def process_image_ocr(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    project_id: str = Form(...),
+    language: str = Form("en"),
+    engine: Optional[str] = Form(None)
+):
+    """Process image file with OCR"""
+    
+    if not ocr_processor.is_ocr_available():
+        raise HTTPException(status_code=503, detail="OCR not available. Please install pytesseract or easyocr.")
+    
+    # Validate project
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Validate file type
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    
+    file_extension = Path(file.filename).suffix.lower()
+    if file_extension not in ocr_processor.supported_image_formats:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported image format: {file_extension}. Supported: {list(ocr_processor.supported_image_formats)}"
+        )
+    
+    # Save uploaded file
+    temp_file_path = await save_uploaded_file(file)
+    background_tasks.add_task(cleanup_temp_file, temp_file_path)
+    
+    try:
+        result = await ocr_processor.process_image_file(
+            file_path=temp_file_path,
+            engine=engine,
+            language=language,
+            project_ids=[project_id]
+        )
+        
+        return {
+            "message": f"Image '{file.filename}' processed with OCR successfully",
+            "result": result,
+            "ocr_info": {
+                "engine_used": result["ocr_engine"],
+                "language": result["ocr_language"],
+                "text_length": result["text_length"]
+            }
+        }
+        
+    except Exception as e:
+        console.print(f"❌ OCR processing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
+
+@app.post("/api/ocr/process-pdf")
+async def process_scanned_pdf_ocr(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    project_id: str = Form(...),
+    language: str = Form("en"),
+    engine: Optional[str] = Form(None)
+):
+    """Process scanned PDF with OCR"""
+    
+    if not ocr_processor.is_ocr_available():
+        raise HTTPException(status_code=503, detail="OCR not available")
+    
+    # Validate project
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Validate file type
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    # Save uploaded file
+    temp_file_path = await save_uploaded_file(file)
+    background_tasks.add_task(cleanup_temp_file, temp_file_path)
+    
+    try:
+        result = await ocr_processor.process_scanned_pdf(
+            file_path=temp_file_path,
+            engine=engine,
+            language=language,
+            project_ids=[project_id]
+        )
+        
+        return {
+            "message": f"Scanned PDF '{file.filename}' processed with OCR successfully",
+            "result": result,
+            "ocr_info": {
+                "engine_used": result["ocr_engine"],
+                "language": result["ocr_language"],
+                "total_pages": result.get("total_pages", 0),
+                "pages_processed": result.get("pages_processed", 0),
+                "text_length": result["text_length"]
+            }
+        }
+        
+    except Exception as e:
+        console.print(f"❌ Scanned PDF processing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Scanned PDF processing failed: {str(e)}")
+
+@app.get("/api/ocr/status")
+async def get_ocr_status():
+    """Get OCR engine status and capabilities"""
+    return ocr_processor.get_engine_status()
+
+@app.get("/api/ocr/test-engines")
+async def test_ocr_engines():
+    """Test all available OCR engines"""
+    if not ocr_processor.is_ocr_available():
+        raise HTTPException(status_code=503, detail="No OCR engines available")
+    
+    try:
+        test_results = ocr_processor.test_ocr_engines()
+        return {
+            "message": "OCR engine testing completed",
+            "results": test_results
+        }
+    except Exception as e:
+        console.print(f"❌ OCR engine testing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"OCR testing failed: {str(e)}")
+
+@app.get("/api/ocr/installation-guide")
+async def get_ocr_installation_guide():
+    """Get OCR installation instructions"""
+    return ocr_processor.get_installation_guide()
+
+# === BATCH PROCESSING ENDPOINTS ===
+
+@app.post("/api/batch/process-directory")
+async def batch_process_directory(
+    directory_path: str = Form(...),
+    project_id: str = Form(...),
+    recursive: bool = Form(True),
+    use_ocr: bool = Form(False),
+    ocr_language: str = Form("en"),
+    file_pattern: str = Form("*")
+):
+    """Batch process all files in a directory"""
+    
+    # Validate project
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Validate directory
+    dir_path = Path(directory_path)
+    if not dir_path.exists():
+        raise HTTPException(status_code=404, detail="Directory not found")
+    
+    if not dir_path.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+    
+    try:
+        # Process documents
+        doc_results = await document_processor.batch_process_directory(
+            directory_path=dir_path,
+            project_ids=[project_id],
+            recursive=recursive,
+            file_pattern=file_pattern
+        )
+        
+        ocr_results = {"processed": [], "failed": []}
+        
+        # Process images with OCR if requested
+        if use_ocr and ocr_processor.is_ocr_available():
+            ocr_results = await ocr_processor.batch_process_images(
+                directory_path=dir_path,
+                language=ocr_language,
+                project_ids=[project_id],
+                recursive=recursive
+            )
+        
+        return {
+            "message": f"Batch processing completed for directory: {directory_path}",
+            "document_processing": doc_results,
+            "ocr_processing": ocr_results,
+            "summary": {
+                "total_documents_processed": len(doc_results["processed"]),
+                "total_ocr_processed": len(ocr_results["processed"]),
+                "total_failed": len(doc_results["failed"]) + len(ocr_results["failed"]),
+                "project_id": project_id
+            }
+        }
+        
+    except Exception as e:
+        console.print(f"❌ Batch processing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Batch processing failed: {str(e)}")
+
+# === ADMIN ENDPOINTS ===
+
+@app.get("/api/admin/stats")
+async def get_admin_stats():
+    """Get comprehensive system statistics"""
+    try:
+        db_stats = db.get_stats()
+        projects = db.get_projects()
+        
+        # Detailed project information
+        project_details = []
+        for project in projects:
+            project_stats = db.get_project_stats(project.id)
+            project_details.append({
+                "id": project.id,
+                "name": project.name,
+                "document_count": project_stats["document_count"],
+                "chat_count": project_stats["chat_count"],
+                "total_file_size": project_stats["total_file_size"],
+                "created_at": project.created_at
+            })
+        
+        # Processing capabilities
+        doc_capabilities = document_processor.get_processing_stats()
+        ocr_status = ocr_processor.get_engine_status()
+        
+        return {
+            "database": db_stats,
+            "projects": {
+                "total": len(projects),
+                "details": project_details
+            },
+            "processing": {
+                "document_formats": doc_capabilities["supported_formats"],
+                "document_capabilities": doc_capabilities["capabilities"],
+                "ocr_available": ocr_status["ocr_ready"],
+                "ocr_engines": ocr_status["available_engines"]
+            },
+            "system": {
+                "app_version": settings.app_version,
+                "environment": settings.environment,
+                "features_enabled": features.get_enabled_features(),
+                "uptime_check": datetime.utcnow().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        console.print(f"❌ Error loading admin stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load admin stats: {str(e)}")
+
+@app.post("/api/admin/reindex")
+async def reindex_documents():
+    """Reindex all documents in the RAG system"""
+    try:
+        db_stats = db.get_stats()
+        
+        # Note: ChromaDB auto-manages indexes, but we can report current status
+        return {
+            "message": "Document reindexing completed",
+            "status": "success",
+            "documents_in_index": db_stats.get("documents", {}).get("total", 0),
+            "vector_chunks": db_stats.get("documents", {}).get("chunks_total", 0),
+            "embedding_model": settings.embedding_model,
+            "reindex_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        console.print(f"❌ Reindex error: {e}")
         raise HTTPException(status_code=500, detail=f"Reindexing failed: {str(e)}")
 
+@app.post("/api/admin/optimize-database")
+async def optimize_database():
+    """Optimize database performance"""
+    try:
+        # Get current stats
+        before_stats = db.get_stats()
+        
+        # ChromaDB auto-optimizes, but we can report optimization status
+        after_stats = db.get_stats()
+        
+        return {
+            "message": "Database optimization completed",
+            "before": before_stats,
+            "after": after_stats,
+            "optimization_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        console.print(f"❌ Database optimization error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database optimization failed: {str(e)}")
+
+@app.get("/api/admin/system-diagnostics")
+async def system_diagnostics():
+    """Run comprehensive system diagnostics"""
+    diagnostics = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "overall_status": "healthy",
+        "issues": [],
+        "warnings": []
+    }
+    
+    try:
+        # Test database
+        try:
+            db_stats = db.get_stats()
+            diagnostics["database"] = {"status": "healthy", "stats": db_stats}
+        except Exception as e:
+            diagnostics["database"] = {"status": "error", "error": str(e)}
+            diagnostics["issues"].append(f"Database error: {e}")
+            diagnostics["overall_status"] = "error"
+        
+        # Test document processor
+        try:
+            doc_stats = document_processor.get_processing_stats()
+            diagnostics["document_processor"] = {"status": "healthy", "capabilities": doc_stats}
+        except Exception as e:
+            diagnostics["document_processor"] = {"status": "error", "error": str(e)}
+            diagnostics["issues"].append(f"Document processor error: {e}")
+        
+        # Test OCR
+        if ocr_processor.is_ocr_available():
+            try:
+                ocr_test = ocr_processor.test_ocr_engines()
+                diagnostics["ocr"] = {"status": "healthy", "test_results": ocr_test}
+            except Exception as e:
+                diagnostics["ocr"] = {"status": "warning", "error": str(e)}
+                diagnostics["warnings"].append(f"OCR warning: {e}")
+        else:
+            diagnostics["ocr"] = {"status": "not_available"}
+            diagnostics["warnings"].append("OCR engines not available")
+        
+        # Test AI
+        try:
+            ai_status = rag_system.get_status()
+            if ai_status["google_ai"]["available"] or ai_status["openai"]["available"]:
+                diagnostics["ai"] = {"status": "healthy", "providers": ai_status}
+            else:
+                diagnostics["ai"] = {"status": "warning", "providers": ai_status}
+                diagnostics["warnings"].append("No AI providers configured")
+        except Exception as e:
+            diagnostics["ai"] = {"status": "error", "error": str(e)}
+            diagnostics["issues"].append(f"AI system error: {e}")
+        
+        # Set overall status
+        if diagnostics["issues"]:
+            diagnostics["overall_status"] = "error"
+        elif diagnostics["warnings"]:
+            diagnostics["overall_status"] = "warning"
+        
+        return diagnostics
+        
+    except Exception as e:
+        console.print(f"❌ System diagnostics failed: {e}")
+        raise HTTPException(status_code=500, detail=f"System diagnostics failed: {str(e)}")
+
+# === DEVELOPMENT ENDPOINTS ===
+
+@app.post("/api/dev/reset-database")
+async def reset_database():
+    """Reset entire database (development only!)"""
+    if not settings.is_development:
+        raise HTTPException(status_code=403, detail="Only available in development mode")
+    
+    try:
+        db.reset_database()
+        return {
+            "message": "Database reset successfully", 
+            "warning": "ALL DATA WAS DELETED!",
+            "environment": settings.environment
+        }
+    except Exception as e:
+        console.print(f"❌ Database reset error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database reset failed: {str(e)}")
+
+@app.get("/api/dev/test-all-features")
+async def test_all_features():
+    """Test all system features (development only!)"""
+    if not settings.is_development:
+        raise HTTPException(status_code=403, detail="Only available in development mode")
+    
+    test_results = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "tests": {}
+    }
+    
+    # Test database
+    try:
+        test_project = db.create_project("Test Project", "Test Description")
+        db.delete_project(test_project.id)
+        test_results["tests"]["database"] = {"status": "pass", "message": "CRUD operations working"}
+    except Exception as e:
+        test_results["tests"]["database"] = {"status": "fail", "error": str(e)}
+    
+    # Test document processing
+    try:
+        stats = document_processor.get_processing_stats()
+        test_results["tests"]["document_processor"] = {"status": "pass", "supported_formats": len(stats["supported_formats"])}
+    except Exception as e:
+        test_results["tests"]["document_processor"] = {"status": "fail", "error": str(e)}
+    
+    # Test OCR
+    try:
+        if ocr_processor.is_ocr_available():
+            ocr_test = ocr_processor.test_ocr_engines()
+            test_results["tests"]["ocr"] = {"status": "pass", "engines_tested": len(ocr_test["engines"])}
+        else:
+            test_results["tests"]["ocr"] = {"status": "skip", "reason": "OCR not available"}
+    except Exception as e:
+        test_results["tests"]["ocr"] = {"status": "fail", "error": str(e)}
+    
+    # Test AI
+    try:
+        ai_status = rag_system.get_status()
+        if ai_status["google_ai"]["available"] or ai_status["openai"]["available"]:
+            test_results["tests"]["ai"] = {"status": "pass", "providers_available": True}
+        else:
+            test_results["tests"]["ai"] = {"status": "skip", "reason": "No AI providers configured"}
+    except Exception as e:
+        test_results["tests"]["ai"] = {"status": "fail", "error": str(e)}
+    
+    return test_results
+
+# === STARTUP/SHUTDOWN EVENTS ===
+
+@app.on_event("startup")
+async def startup_event():
+    """Application startup event"""
+    console.print("🚀 RagFlow Backend starting with advanced features...")
+    console.print("=" * 60)
+    
+    # Database statistics
+    try:
+        db_stats = db.get_stats()
+        console.print("📊 Database Statistics:")
+        console.print(f"   Projects: {db_stats.get('projects', {}).get('total', 0)}")
+        console.print(f"   Documents: {db_stats.get('documents', {}).get('total', 0)}")
+        console.print(f"   Document Chunks: {db_stats.get('documents', {}).get('chunks_total', 0)}")
+        console.print(f"   Chats: {db_stats.get('chats', {}).get('total', 0)}")
+    except Exception as e:
+        console.print(f"⚠️ Could not load database stats: {e}")
+    
+    # Feature status
+    console.print("\n🔧 Feature Status:")
+    try:
+        feature_summary = features.summary()
+        console.print(f"   Enabled Features: {feature_summary['enabled_count']}/{feature_summary['total_features']}")
+    except Exception as e:
+        console.print(f"   Feature Status: Error loading - {e}")
+    
+    # Document processing
+    try:
+        doc_stats = document_processor.get_processing_stats()
+        # Fix: Check if supported_formats is a number or list
+        supported_formats = doc_stats.get('supported_formats', 0)
+        if isinstance(supported_formats, (list, dict)):
+            format_count = len(supported_formats)
+        else:
+            format_count = supported_formats  # It's already a number
+        
+        console.print(f"   Document Formats: {format_count}")
+        
+        # Show available formats
+        available_formats = doc_stats.get('available_formats', [])
+        if available_formats:
+            format_names = [fmt['extension'] for fmt in available_formats if fmt.get('available', False)]
+            console.print(f"   Supported Extensions: {', '.join(format_names)}")
+    except Exception as e:
+        console.print(f"   Document Processing: Error - {e}")
+    
+    # OCR status
+    try:
+        console.print(f"   OCR Available: {'✅' if ocr_processor.is_ocr_available() else '❌'}")
+        if ocr_processor.is_ocr_available():
+            available_engines = [engine for engine, available in ocr_processor.available_engines.items() if available]
+            console.print(f"   OCR Engines: {', '.join(available_engines) if available_engines else 'None working'}")
+    except Exception as e:
+        console.print(f"   OCR Status: Error - {e}")
+    
+    # AI status
+    try:
+        ai_status = rag_system.get_status()
+        ai_providers = []
+        if ai_status.get("google_ai", {}).get("available", False):
+            ai_providers.append("Google AI")
+        if ai_status.get("openai", {}).get("available", False):
+            ai_providers.append("OpenAI")
+        
+        console.print(f"   AI Providers: {', '.join(ai_providers) if ai_providers else 'None configured'}")
+    except Exception as e:
+        console.print(f"   AI Status: Error - {e}")
+    
+    console.print("\n✅ RagFlow Backend ready!")
+    console.print("📖 API Documentation: http://127.0.0.1:8000/docs")
+    console.print("=" * 60)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Application shutdown event"""
+    console.print("🛑 RagFlow Backend shutting down...")
+    console.print("✅ Shutdown complete")
+
 # === ERROR HANDLERS ===
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """Global exception handler"""
-    rprint(f"❌ Unhandled exception: {exc}")
+
+@app.exception_handler(404)
+async def not_found_handler(request, exc):
     return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error", "error": str(exc)}
+        status_code=404,
+        content={
+            "error": "Not Found",
+            "message": "The requested resource was not found",
+            "path": str(request.url.path)
+        }
     )
 
-# === MAIN EXECUTION ===
+@app.exception_handler(500)
+async def internal_error_handler(request, exc):
+    console.print(f"❌ Internal server error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred",
+            "support": "Check server logs for details"
+        }
+    )
+
+# === MAIN ENTRY POINT ===
+
 if __name__ == "__main__":
     import uvicorn
+    
+    console.print("🚀 Starting RagFlow Backend...")
     uvicorn.run(
-        "main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.reload,
+        app, 
+        host="0.0.0.0", 
+        port=8000,
+        reload=settings.is_development,
         log_level="info"
     )

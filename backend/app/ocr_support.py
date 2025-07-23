@@ -1,31 +1,35 @@
-#!/usr/bin/env python3
+# backend/app/ocr_support.py - Modern OCR Support with ChromaDB Integration
 """
-OCR Support für gescannte PDFs und Bilder
-Unterstützt Tesseract OCR und verschiedene Bildformate
+Modern OCR Support for RagFlow
+Handles image-to-text conversion and scanned PDF processing
 """
 
+import io
 import os
-import tempfile
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
-import asyncio
+from typing import Dict, Any, List, Optional, Union, Tuple
 from datetime import datetime
+from PIL import Image
+import base64
 
-# OCR und Bildverarbeitung
+# OCR Libraries (with fallbacks)
 try:
     import pytesseract
-    from PIL import Image, ImageEnhance, ImageFilter
-    TESSERACT_AVAILABLE = True
+    PYTESSERACT_AVAILABLE = True
 except ImportError:
-    TESSERACT_AVAILABLE = False
-    print("⚠️ OCR nicht verfügbar. Installiere: pip install pytesseract pillow")
+    PYTESSERACT_AVAILABLE = False
 
 try:
-    import pdf2image
+    import easyocr
+    EASYOCR_AVAILABLE = True
+except ImportError:
+    EASYOCR_AVAILABLE = False
+
+try:
+    from pdf2image import convert_from_bytes, convert_from_path
     PDF2IMAGE_AVAILABLE = True
 except ImportError:
     PDF2IMAGE_AVAILABLE = False
-    print("⚠️ pdf2image nicht verfügbar. Installiere: pip install pdf2image")
 
 try:
     import cv2
@@ -33,632 +37,658 @@ try:
     OPENCV_AVAILABLE = True
 except ImportError:
     OPENCV_AVAILABLE = False
-    print("⚠️ OpenCV nicht verfügbar. Installiere: pip install opencv-python")
+
+try:
+    import PyPDF2
+    PYPDF2_AVAILABLE = True
+except ImportError:
+    PYPDF2_AVAILABLE = False
+
+from rich.console import Console
+from .database import get_db_manager
+from .config import settings
+
+console = Console()
+
 
 class OCRProcessor:
-    """Verarbeitet gescannte Dokumente mit OCR"""
-    
-    def __init__(self, tesseract_path: str = None):
-        """
-        Initialisiert OCR Processor
-        
-        Args:
-            tesseract_path: Pfad zur Tesseract Installation (falls nicht in PATH)
-        """
-        self.tesseract_available = TESSERACT_AVAILABLE
-        self.pdf2image_available = PDF2IMAGE_AVAILABLE
-        self.opencv_available = OPENCV_AVAILABLE
-        
-        # Tesseract konfigurieren
-        if tesseract_path and TESSERACT_AVAILABLE:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_path
-        
-        # Unterstützte Sprachen für OCR
-        self.ocr_languages = {
-            'de': 'deu',      # Deutsch
-            'en': 'eng',      # Englisch  
-            'fr': 'fra',      # Französisch
-            'it': 'ita',      # Italienisch
-            'es': 'spa',      # Spanisch
-            'pt': 'por',      # Portugiesisch
-            'nl': 'nld',      # Niederländisch
-            'ru': 'rus',      # Russisch
-        }
-        
-        # Prüfe verfügbare Tesseract-Sprachen
-        self.available_languages = self._check_available_languages()
-    
-    def _check_available_languages(self) -> List[str]:
-        """Prüft welche Sprachen in Tesseract verfügbar sind"""
-        if not self.tesseract_available:
-            return []
-        
-        try:
-            langs = pytesseract.get_languages(config='')
-            print(f"✅ Verfügbare OCR-Sprachen: {', '.join(langs)}")
-            return langs
-        except Exception as e:
-            print(f"⚠️ Fehler beim Prüfen der OCR-Sprachen: {e}")
-            return ['eng']  # Fallback auf Englisch
-    
-    def is_scanned_pdf(self, pdf_path: str) -> bool:
-        """
-        Prüft ob ein PDF gescannt ist (wenig/kein extrahierbarer Text)
-        
-        Args:
-            pdf_path: Pfad zur PDF-Datei
-            
-        Returns:
-            True wenn PDF wahrscheinlich gescannt ist
-        """
-        try:
-            # Versuche Text zu extrahieren
-            if TESSERACT_AVAILABLE:
-                import PyPDF2
-                with open(pdf_path, 'rb') as file:
-                    reader = PyPDF2.PdfReader(file)
-                    total_text = ""
-                    
-                    # Prüfe erste 3 Seiten
-                    for i, page in enumerate(reader.pages[:3]):
-                        page_text = page.extract_text()
-                        total_text += page_text
-                    
-                    # Wenn weniger als 50 Zeichen pro Seite -> wahrscheinlich gescannt
-                    avg_chars_per_page = len(total_text) / min(len(reader.pages), 3)
-                    is_scanned = avg_chars_per_page < 50
-                    
-                    print(f"📊 PDF-Analyse: {avg_chars_per_page:.1f} Zeichen/Seite -> {'Gescannt' if is_scanned else 'Text-PDF'}")
-                    return is_scanned
-            
-        except Exception as e:
-            print(f"⚠️ Fehler bei PDF-Analyse: {e}")
-            return False  # Im Zweifel kein OCR
-        
-        return False
-    
-    def preprocess_image(self, image: Image.Image) -> Image.Image:
-        """
-        Verbessert Bild für bessere OCR-Ergebnisse
-        
-        Args:
-            image: PIL Image
-            
-        Returns:
-            Verbessertes Image
-        """
-        try:
-            # Konvertiere zu Graustufen
-            if image.mode != 'L':
-                image = image.convert('L')
-            
-            # Erhöhe Kontrast
-            enhancer = ImageEnhance.Contrast(image)
-            image = enhancer.enhance(2.0)
-            
-            # Erhöhe Schärfe
-            enhancer = ImageEnhance.Sharpness(image)
-            image = enhancer.enhance(1.5)
-            
-            # Rauschreduzierung (falls OpenCV verfügbar)
-            if self.opencv_available:
-                # Konvertiere zu OpenCV Format
-                cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_GRAY2BGR)
-                
-                # Rauschreduzierung
-                cv_image = cv2.fastNlMeansDenoisingColored(cv_image, None, 10, 10, 7, 21)
-                
-                # Zurück zu PIL
-                image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY))
-            
-            # Schwellenwert-Filter für bessere Texterkennung
-            # image = image.point(lambda x: 0 if x < 128 else 255, '1')
-            
-            return image
-            
-        except Exception as e:
-            print(f"⚠️ Bildverbesserung fehlgeschlagen: {e}")
-            return image
-    
-    async def extract_text_from_image(self, image_path: str, language: str = 'eng') -> Dict[str, Any]:
-        """
-        Extrahiert Text aus einem Bild mit OCR
-        
-        Args:
-            image_path: Pfad zum Bild
-            language: Sprache für OCR
-            
-        Returns:
-            Dict mit extrahiertem Text und Metadaten
-        """
-        if not self.tesseract_available:
-            return {
-                "success": False,
-                "text": "",
-                "error": "Tesseract OCR nicht verfügbar",
-                "confidence": 0.0
-            }
-        
-        try:
-            print(f"🔍 OCR für Bild: {Path(image_path).name}")
-            
-            # Lade und verbessere Bild
-            image = Image.open(image_path)
-            original_size = image.size
-            
-            # Bildverbesserung
-            processed_image = self.preprocess_image(image)
-            
-            # OCR Konfiguration
-            ocr_config = r'--oem 3 --psm 6'  # OCR Engine Mode 3, Page Segmentation Mode 6
-            
-            # Bestimme Sprache
-            tesseract_lang = self.ocr_languages.get(language, 'eng')
-            if tesseract_lang not in self.available_languages:
-                tesseract_lang = 'eng'  # Fallback
-            
-            # Führe OCR durch
-            extracted_text = pytesseract.image_to_string(
-                processed_image, 
-                lang=tesseract_lang, 
-                config=ocr_config
-            )
-            
-            # Hole Confidence-Daten
-            try:
-                data = pytesseract.image_to_data(
-                    processed_image, 
-                    lang=tesseract_lang, 
-                    config=ocr_config,
-                    output_type=pytesseract.Output.DICT
-                )
-                
-                # Berechne durchschnittliche Confidence
-                confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
-                avg_confidence = sum(confidences) / len(confidences) if confidences else 0
-                
-            except Exception:
-                avg_confidence = 50  # Fallback-Wert
-            
-            # Bereinige Text
-            cleaned_text = self._clean_ocr_text(extracted_text)
-            
-            result = {
-                "success": True,
-                "text": cleaned_text,
-                "raw_text": extracted_text,
-                "confidence": avg_confidence,
-                "language": tesseract_lang,
-                "image_size": original_size,
-                "char_count": len(cleaned_text),
-                "word_count": len(cleaned_text.split()),
-                "processing_info": {
-                    "preprocessed": True,
-                    "ocr_config": ocr_config,
-                    "tesseract_version": pytesseract.get_tesseract_version()
-                }
-            }
-            
-            print(f"✅ OCR erfolgreich: {len(cleaned_text)} Zeichen, {avg_confidence:.1f}% Confidence")
-            return result
-            
-        except Exception as e:
-            print(f"❌ OCR fehlgeschlagen: {e}")
-            return {
-                "success": False,
-                "text": "",
-                "error": str(e),
-                "confidence": 0.0
-            }
-    
-    async def extract_text_from_scanned_pdf(self, pdf_path: str, language: str = 'eng') -> Dict[str, Any]:
-        """
-        Extrahiert Text aus gescannter PDF mit OCR
-        
-        Args:
-            pdf_path: Pfad zur PDF-Datei
-            language: Sprache für OCR
-            
-        Returns:
-            Dict mit extrahiertem Text und Metadaten
-        """
-        if not self.pdf2image_available or not self.tesseract_available:
-            return {
-                "success": False,
-                "text": "",
-                "error": "PDF2Image oder Tesseract nicht verfügbar",
-                "pages_processed": 0
-            }
-        
-        try:
-            print(f"📄 OCR für gescannte PDF: {Path(pdf_path).name}")
-            
-            # Konvertiere PDF zu Bildern
-            pages = pdf2image.convert_from_path(pdf_path, dpi=300)  # Hohe DPI für bessere Qualität
-            print(f"📊 {len(pages)} Seiten zur OCR-Verarbeitung")
-            
-            all_text = []
-            page_results = []
-            total_confidence = 0
-            
-            for i, page_image in enumerate(pages):
-                print(f"🔍 Verarbeite Seite {i+1}/{len(pages)}")
-                
-                # Speichere Seite als temporäres Bild
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
-                    page_image.save(temp_file.name, 'PNG')
-                    temp_path = temp_file.name
-                
-                try:
-                    # OCR für diese Seite
-                    page_result = await self.extract_text_from_image(temp_path, language)
-                    
-                    if page_result["success"]:
-                        page_text = page_result["text"]
-                        page_confidence = page_result["confidence"]
-                        
-                        all_text.append(f"[Seite {i+1}]\n{page_text}")
-                        total_confidence += page_confidence
-                        
-                        page_results.append({
-                            "page_number": i+1,
-                            "text": page_text,
-                            "confidence": page_confidence,
-                            "char_count": len(page_text),
-                            "word_count": len(page_text.split())
-                        })
-                    else:
-                        print(f"⚠️ OCR fehlgeschlagen für Seite {i+1}: {page_result.get('error', 'Unbekannter Fehler')}")
-                        page_results.append({
-                            "page_number": i+1,
-                            "text": "",
-                            "confidence": 0,
-                            "error": page_result.get('error', 'OCR fehlgeschlagen')
-                        })
-                
-                finally:
-                    # Lösche temporäre Datei
-                    try:
-                        os.unlink(temp_path)
-                    except:
-                        pass
-            
-            # Kombiniere alle Seiten
-            full_text = "\n\n".join(all_text)
-            avg_confidence = total_confidence / len(pages) if pages else 0
-            
-            result = {
-                "success": True,
-                "text": full_text,
-                "pages_processed": len(pages),
-                "successful_pages": len([p for p in page_results if p.get("confidence", 0) > 0]),
-                "average_confidence": avg_confidence,
-                "total_chars": len(full_text),
-                "total_words": len(full_text.split()),
-                "page_results": page_results,
-                "language": language,
-                "processing_info": {
-                    "pdf_path": pdf_path,
-                    "dpi": 300,
-                    "ocr_method": "pdf2image + tesseract"
-                }
-            }
-            
-            print(f"✅ PDF OCR abgeschlossen: {len(pages)} Seiten, {avg_confidence:.1f}% Confidence")
-            return result
-            
-        except Exception as e:
-            print(f"❌ PDF OCR fehlgeschlagen: {e}")
-            return {
-                "success": False,
-                "text": "",
-                "error": str(e),
-                "pages_processed": 0
-            }
-    
-    def _clean_ocr_text(self, text: str) -> str:
-        """Bereinigt OCR-Text von typischen Fehlern"""
-        if not text:
-            return ""
-        
-        # Entferne übermäßige Leerzeichen
-        import re
-        
-        # Mehrfache Leerzeichen durch einzelne ersetzen
-        text = re.sub(r' +', ' ', text)
-        
-        # Mehrfache Zeilenumbrüche reduzieren
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        
-        # Entferne Leerzeichen am Zeilenanfang/-ende
-        lines = [line.strip() for line in text.split('\n')]
-        text = '\n'.join(lines)
-        
-        # Typische OCR-Fehler korrigieren
-        ocr_corrections = {
-            r'\|': 'I',  # Pipe zu I
-            r'0(?=[a-zA-Z])': 'O',  # 0 vor Buchstaben zu O
-            r'(?<=[a-zA-Z])0': 'o',  # 0 nach Buchstaben zu o
-            r'5(?=[a-zA-Z])': 'S',  # 5 vor Buchstaben zu S
-            r'1(?=[a-zA-Z])': 'l',  # 1 vor Buchstaben zu l
-        }
-        
-        for pattern, replacement in ocr_corrections.items():
-            text = re.sub(pattern, replacement, text)
-        
-        return text.strip()
-
-class EnhancedDocumentProcessor:
-    """Erweiterte Dokumentenverarbeitung mit allen Features"""
+    """Advanced OCR processor with multiple engine support"""
     
     def __init__(self):
-        self.ocr_processor = OCRProcessor()
+        self.db = get_db_manager()
+        self.available_engines = self._detect_available_engines()
+        self.default_engine = self._get_default_engine()
         
-        # Importiere andere Prozessoren
-        try:
-            from multilingual_support import MultilingualProcessor
-            self.multilingual_processor = MultilingualProcessor()
-        except ImportError:
-            self.multilingual_processor = None
-            print("⚠️ Multilingual Support nicht verfügbar")
+        # Initialize EasyOCR reader if available
+        self.easyocr_reader = None
+        if EASYOCR_AVAILABLE:
+            try:
+                self.easyocr_reader = easyocr.Reader(['en', 'de', 'fr', 'es'])  # Multi-language
+                console.print("✅ EasyOCR initialized with multi-language support")
+            except Exception as e:
+                console.print(f"⚠️ EasyOCR initialization failed: {e}")
         
-        try:
-            from vector_embeddings import VectorEmbeddingManager
-            self.vector_manager = VectorEmbeddingManager()
-        except ImportError:
-            self.vector_manager = None
-            print("⚠️ Vector Embeddings nicht verfügbar")
-    
-    async def process_document_complete(self, file_path: str, file_type: str, document_id: str, 
-                                      document_metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Vollständige Dokumentenverarbeitung mit allen Features
-        
-        Args:
-            file_path: Pfad zur Datei
-            file_type: Dateityp
-            document_id: Dokument-ID
-            document_metadata: Metadaten
-            
-        Returns:
-            Vollständiges Verarbeitungsergebnis
-        """
-        print(f"🚀 Vollständige Verarbeitung: {document_metadata.get('filename')}")
-        
-        result = {
-            "success": False,
-            "text": "",
-            "chunks": [],
-            "metadata": {},
-            "features_used": [],
-            "processing_time": 0
+        # Supported image formats
+        self.supported_image_formats = {
+            '.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.webp'
         }
         
-        start_time = datetime.utcnow()
+        # Supported document formats for OCR
+        self.supported_document_formats = {
+            '.pdf'  # Scanned PDFs
+        }
+    
+    def _detect_available_engines(self) -> Dict[str, bool]:
+        """Detect available OCR engines"""
+        engines = {
+            "tesseract": PYTESSERACT_AVAILABLE,
+            "easyocr": EASYOCR_AVAILABLE,
+            "pdf2image": PDF2IMAGE_AVAILABLE,
+            "opencv": OPENCV_AVAILABLE
+        }
+        
+        # Test Tesseract installation
+        if PYTESSERACT_AVAILABLE:
+            try:
+                pytesseract.get_tesseract_version()
+                engines["tesseract"] = True
+            except Exception:
+                engines["tesseract"] = False
+                console.print("⚠️ Tesseract not properly installed")
+        
+        return engines
+    
+    def _get_default_engine(self) -> str:
+        """Get default OCR engine based on availability"""
+        if self.available_engines.get("easyocr"):
+            return "easyocr"  # Generally better accuracy
+        elif self.available_engines.get("tesseract"):
+            return "tesseract"  # Fast and reliable
+        else:
+            return None
+    
+    def is_ocr_available(self) -> bool:
+        """Check if any OCR engine is available"""
+        return any(self.available_engines.values())
+    
+    def get_engine_status(self) -> Dict[str, Any]:
+        """Get status of all OCR engines"""
+        status = {
+            "available_engines": self.available_engines,
+            "default_engine": self.default_engine,
+            "ocr_ready": self.is_ocr_available(),
+            "supported_formats": {
+                "images": list(self.supported_image_formats),
+                "documents": list(self.supported_document_formats)
+            },
+            "installation_notes": {
+                "tesseract": "Install: apt-get install tesseract-ocr (Linux) or brew install tesseract (Mac)",
+                "easyocr": "Install: pip install easyocr",
+                "pdf2image": "Install: pip install pdf2image",
+                "opencv": "Install: pip install opencv-python"
+            }
+        }
+        
+        return status
+    
+    def can_process_file(self, file_path: Union[str, Path]) -> bool:
+        """Check if file can be processed with OCR"""
+        file_path = Path(file_path)
+        extension = file_path.suffix.lower()
+        
+        is_image = extension in self.supported_image_formats
+        is_document = extension in self.supported_document_formats
+        
+        return self.is_ocr_available() and (is_image or is_document)
+    
+    async def process_image_file(
+        self, 
+        file_path: Union[str, Path],
+        engine: str = None,
+        language: str = "en",
+        project_ids: List[str] = None,
+        metadata: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Process image file with OCR and store in ChromaDB"""
+        
+        if not self.is_ocr_available():
+            raise Exception("No OCR engines available. Please install pytesseract or easyocr.")
+        
+        file_path = Path(file_path)
+        engine = engine or self.default_engine
+        
+        if not file_path.exists():
+            raise FileNotFoundError(f"Image file not found: {file_path}")
+        
+        if file_path.suffix.lower() not in self.supported_image_formats:
+            raise ValueError(f"Unsupported image format: {file_path.suffix}")
         
         try:
-            # 1. Grundlegende Textextraktion
-            if file_type == "pdf":
-                # Prüfe ob PDF gescannt ist
-                if self.ocr_processor.is_scanned_pdf(file_path):
-                    print("📄 Gescannte PDF erkannt - verwende OCR")
-                    
-                    # Erkenne Sprache wenn möglich (aus Metadaten oder Dateiname)
-                    ocr_language = self._detect_document_language(document_metadata)
-                    
-                    # OCR-Verarbeitung
-                    ocr_result = await self.ocr_processor.extract_text_from_scanned_pdf(file_path, ocr_language)
-                    
-                    if ocr_result["success"]:
-                        text = ocr_result["text"]
-                        result["ocr_info"] = ocr_result
-                        result["features_used"].append("ocr")
-                        print(f"✅ OCR erfolgreich: {len(text)} Zeichen")
-                    else:
-                        print(f"❌ OCR fehlgeschlagen: {ocr_result.get('error')}")
-                        return result
-                else:
-                    # Normale PDF-Verarbeitung
-                    from document_processor import DocumentProcessor
-                    processor = DocumentProcessor()
-                    basic_result = await processor.process_document(file_path, file_type)
-                    
-                    if basic_result["success"]:
-                        text = basic_result["text"]
-                        result["features_used"].append("pdf_extraction")
-                    else:
-                        return result
+            console.print(f"🖼️ Processing image with OCR: {file_path.name}")
+            
+            # Load and preprocess image
+            image = Image.open(file_path)
+            processed_image = self._preprocess_image(image)
+            
+            # Extract text using specified engine
+            if engine == "easyocr" and self.easyocr_reader:
+                extracted_text = await self._extract_text_easyocr(processed_image, language)
+            elif engine == "tesseract" and self.available_engines["tesseract"]:
+                extracted_text = await self._extract_text_tesseract(processed_image, language)
             else:
-                # Andere Dateitypen (DOCX, TXT, MD)
-                from document_processor import DocumentProcessor
-                processor = DocumentProcessor()
-                basic_result = await processor.process_document(file_path, file_type)
-                
-                if basic_result["success"]:
-                    text = basic_result["text"]
-                    result["features_used"].append(f"{file_type}_extraction")
-                else:
-                    return result
+                raise Exception(f"OCR engine '{engine}' not available")
             
-            # 2. Spracherkennung
-            language_info = None
-            if self.multilingual_processor and text:
-                language_info = self.multilingual_processor.detect_language(text)
-                result["language_info"] = language_info
-                result["features_used"].append("language_detection")
-                print(f"🌍 Sprache erkannt: {language_info['language_name']}")
+            # Get image metadata
+            image_metadata = self._get_image_metadata(image, file_path)
             
-            # 3. Erweiterte Chunk-Strategien
-            from multilingual_support import AdvancedChunkingStrategy
-            chunker = AdvancedChunkingStrategy()
-            
-            # Wähle Chunking-Strategie
-            strategy = self._choose_chunking_strategy(file_type, text, language_info)
-            chunks = chunker.chunk_text_advanced(text, strategy=strategy)
-            
-            result["chunking_strategy"] = strategy
-            result["features_used"].append("advanced_chunking")
-            print(f"📄 {len(chunks)} Chunks erstellt (Strategie: {strategy})")
-            
-            # 4. Mehrsprachige Verarbeitung
-            if self.multilingual_processor and language_info and language_info.get("supported", False):
-                enhanced_chunks = []
-                for chunk in chunks:
-                    enhanced_chunk = self.multilingual_processor.process_multilingual_chunk(
-                        chunk, language_info["language"]
-                    )
-                    enhanced_chunks.append(enhanced_chunk)
-                chunks = enhanced_chunks
-                result["features_used"].append("multilingual_processing")
-                print("🌍 Mehrsprachige Chunk-Verarbeitung abgeschlossen")
-            
-            # 5. Vector Embeddings
-            if self.vector_manager and self.vector_manager.model:
-                await self.vector_manager.process_document_chunks(document_id, chunks, document_metadata)
-                result["features_used"].append("vector_embeddings")
-                print("🔍 Vector Embeddings erstellt")
-            
-            # 6. Erweiterte Metadaten
-            processing_time = (datetime.utcnow() - start_time).total_seconds()
-            
-            enhanced_metadata = {
-                **document_metadata,
-                "text_length": len(text),
-                "word_count": len(text.split()),
-                "chunk_count": len(chunks),
-                "language_info": language_info,
-                "chunking_strategy": strategy,
-                "features_used": result["features_used"],
-                "processing_time_seconds": processing_time,
-                "enhanced_processing": True,
-                "processed_at": datetime.utcnow().isoformat()
+            # Prepare document metadata
+            doc_metadata = {
+                "ocr_engine": engine,
+                "ocr_language": language,
+                "original_format": "image",
+                "image_width": image_metadata["width"],
+                "image_height": image_metadata["height"],
+                "image_mode": image_metadata["mode"],
+                "processed_at": datetime.utcnow().isoformat(),
+                "ocr_confidence": getattr(extracted_text, 'confidence', None),
+                "text_length": len(extracted_text) if isinstance(extracted_text, str) else 0,
+                **(metadata or {})
             }
             
-            # 7. Erfolgreiche Rückgabe
-            result.update({
-                "success": True,
-                "text": text,
-                "chunks": chunks,
-                "metadata": enhanced_metadata,
-                "processing_time": processing_time
-            })
+            # Store in ChromaDB
+            document = self.db.create_document(
+                filename=file_path.name,
+                file_type=file_path.suffix.lower(),
+                file_size=file_path.stat().st_size,
+                file_path=str(file_path.absolute()),
+                content=str(extracted_text),
+                project_ids=project_ids or []
+            )
             
-            print(f"✅ Vollständige Verarbeitung abgeschlossen ({processing_time:.2f}s)")
-            return result
+            # Update metadata
+            document.metadata.update(doc_metadata)
+            self.db._update_document_metadata(document.id, document)
+            
+            console.print(f"✅ Image OCR completed: {document.id}")
+            
+            return {
+                "document_id": document.id,
+                "filename": file_path.name,
+                "extracted_text": str(extracted_text),
+                "text_length": len(str(extracted_text)),
+                "ocr_engine": engine,
+                "ocr_language": language,
+                "processing_status": "completed",
+                "metadata": doc_metadata
+            }
             
         except Exception as e:
-            print(f"❌ Vollständige Verarbeitung fehlgeschlagen: {e}")
-            result["error"] = str(e)
-            return result
+            console.print(f"❌ OCR processing failed for {file_path.name}: {e}")
+            raise Exception(f"OCR processing failed: {str(e)}")
     
-    def _detect_document_language(self, document_metadata: Dict[str, Any]) -> str:
-        """Versucht Dokumentsprache zu erkennen"""
-        # Aus Dateiname
-        filename = document_metadata.get("filename", "").lower()
+    async def process_scanned_pdf(
+        self, 
+        file_path: Union[str, Path],
+        engine: str = None,
+        language: str = "en",
+        project_ids: List[str] = None,
+        metadata: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Process scanned PDF with OCR and store in ChromaDB"""
         
-        language_indicators = {
-            "de": ["deutsch", "german", "de_", "_de", "ger"],
-            "en": ["english", "en_", "_en", "eng"],
-            "fr": ["french", "francais", "fr_", "_fr", "fra"],
-            "it": ["italian", "italiano", "it_", "_it", "ita"],
-            "es": ["spanish", "espanol", "es_", "_es", "spa"]
+        if not PDF2IMAGE_AVAILABLE:
+            raise Exception("PDF processing requires pdf2image. Install with: pip install pdf2image")
+        
+        if not self.is_ocr_available():
+            raise Exception("No OCR engines available")
+        
+        file_path = Path(file_path)
+        engine = engine or self.default_engine
+        
+        try:
+            console.print(f"📄 Processing scanned PDF: {file_path.name}")
+            
+            # First, try to extract text normally (in case it's not scanned)
+            regular_text = await self._try_regular_pdf_extraction(file_path)
+            
+            if regular_text and len(regular_text.strip()) > 100:
+                console.print("✅ PDF contains extractable text, using regular extraction")
+                return await self._store_pdf_text(file_path, regular_text, project_ids, metadata, "regular")
+            
+            # Convert PDF to images
+            console.print("🔄 Converting PDF pages to images for OCR...")
+            images = convert_from_path(str(file_path), dpi=300)  # High DPI for better OCR
+            
+            # Process each page
+            page_texts = []
+            total_confidence = 0
+            
+            for page_num, image in enumerate(images, 1):
+                console.print(f"📄 Processing page {page_num}/{len(images)}")
+                
+                # Preprocess image
+                processed_image = self._preprocess_image(image)
+                
+                # Extract text
+                if engine == "easyocr" and self.easyocr_reader:
+                    page_text = await self._extract_text_easyocr(processed_image, language)
+                elif engine == "tesseract" and self.available_engines["tesseract"]:
+                    page_text = await self._extract_text_tesseract(processed_image, language)
+                else:
+                    raise Exception(f"OCR engine '{engine}' not available")
+                
+                if page_text.strip():
+                    page_texts.append(f"--- Page {page_num} ---\n{page_text}")
+            
+            # Combine all pages
+            full_text = "\n\n".join(page_texts)
+            
+            if not full_text.strip():
+                raise Exception("No text could be extracted from PDF")
+            
+            # Store in ChromaDB
+            doc_metadata = {
+                "ocr_engine": engine,
+                "ocr_language": language,
+                "original_format": "scanned_pdf",
+                "total_pages": len(images),
+                "pages_processed": len(page_texts),
+                "processed_at": datetime.utcnow().isoformat(),
+                "text_length": len(full_text),
+                "processing_method": "ocr",
+                **(metadata or {})
+            }
+            
+            document = self.db.create_document(
+                filename=file_path.name,
+                file_type=".pdf",
+                file_size=file_path.stat().st_size,
+                file_path=str(file_path.absolute()),
+                content=full_text,
+                project_ids=project_ids or []
+            )
+            
+            document.metadata.update(doc_metadata)
+            self.db._update_document_metadata(document.id, document)
+            
+            console.print(f"✅ Scanned PDF OCR completed: {document.id}")
+            
+            return {
+                "document_id": document.id,
+                "filename": file_path.name,
+                "extracted_text": full_text,
+                "text_length": len(full_text),
+                "total_pages": len(images),
+                "pages_processed": len(page_texts),
+                "ocr_engine": engine,
+                "ocr_language": language,
+                "processing_status": "completed",
+                "metadata": doc_metadata
+            }
+            
+        except Exception as e:
+            console.print(f"❌ Scanned PDF processing failed for {file_path.name}: {e}")
+            raise Exception(f"Scanned PDF processing failed: {str(e)}")
+    
+    async def _try_regular_pdf_extraction(self, file_path: Path) -> str:
+        """Try to extract text from PDF using regular methods"""
+        if not PYPDF2_AVAILABLE:
+            return ""
+        
+        try:
+            with open(file_path, 'rb') as file:
+                reader = PyPDF2.PdfReader(file)
+                text_parts = []
+                
+                for page in reader.pages:
+                    page_text = page.extract_text()
+                    if page_text.strip():
+                        text_parts.append(page_text)
+                
+                return "\n\n".join(text_parts)
+        except Exception:
+            return ""
+    
+    async def _store_pdf_text(
+        self, 
+        file_path: Path, 
+        text: str, 
+        project_ids: List[str], 
+        metadata: Dict[str, Any], 
+        method: str
+    ) -> Dict[str, Any]:
+        """Store PDF text in ChromaDB"""
+        doc_metadata = {
+            "original_format": "pdf",
+            "processing_method": method,
+            "processed_at": datetime.utcnow().isoformat(),
+            "text_length": len(text),
+            **(metadata or {})
         }
         
-        for lang_code, indicators in language_indicators.items():
-            if any(indicator in filename for indicator in indicators):
-                return lang_code
+        document = self.db.create_document(
+            filename=file_path.name,
+            file_type=".pdf",
+            file_size=file_path.stat().st_size,
+            file_path=str(file_path.absolute()),
+            content=text,
+            project_ids=project_ids or []
+        )
         
-        return "eng"  # Fallback auf Englisch
+        document.metadata.update(doc_metadata)
+        self.db._update_document_metadata(document.id, document)
+        
+        return {
+            "document_id": document.id,
+            "filename": file_path.name,
+            "extracted_text": text,
+            "text_length": len(text),
+            "processing_method": method,
+            "processing_status": "completed",
+            "metadata": doc_metadata
+        }
     
-    def _choose_chunking_strategy(self, file_type: str, text: str, language_info: Dict = None) -> str:
-        """Wählt optimale Chunking-Strategie"""
-        text_length = len(text)
+    def _preprocess_image(self, image: Image.Image) -> Image.Image:
+        """Preprocess image for better OCR results"""
+        try:
+            # Convert to RGB if necessary
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Apply preprocessing if OpenCV is available
+            if OPENCV_AVAILABLE:
+                # Convert PIL to OpenCV format
+                img_array = np.array(image)
+                img_cv = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                
+                # Apply preprocessing
+                img_cv = self._opencv_preprocess(img_cv)
+                
+                # Convert back to PIL
+                img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+                image = Image.fromarray(img_rgb)
+            
+            return image
+            
+        except Exception as e:
+            console.print(f"⚠️ Image preprocessing failed, using original: {e}")
+            return image
+    
+    def _opencv_preprocess(self, img: np.ndarray) -> np.ndarray:
+        """Apply OpenCV preprocessing for better OCR"""
+        try:
+            # Convert to grayscale
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
+            # Apply Gaussian blur to reduce noise
+            blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+            
+            # Apply adaptive threshold
+            thresh = cv2.adaptiveThreshold(
+                blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+            )
+            
+            # Morphological operations to clean up
+            kernel = np.ones((1, 1), np.uint8)
+            cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+            
+            # Convert back to BGR for consistency
+            return cv2.cvtColor(cleaned, cv2.COLOR_GRAY2BGR)
+            
+        except Exception as e:
+            console.print(f"⚠️ OpenCV preprocessing failed: {e}")
+            return img
+    
+    async def _extract_text_easyocr(self, image: Image.Image, language: str = "en") -> str:
+        """Extract text using EasyOCR"""
+        try:
+            # Convert PIL image to numpy array
+            img_array = np.array(image)
+            
+            # EasyOCR expects BGR format
+            if len(img_array.shape) == 3:
+                img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+            
+            # Extract text
+            results = self.easyocr_reader.readtext(img_array)
+            
+            # Combine text results
+            text_parts = []
+            for (bbox, text, confidence) in results:
+                if confidence > 0.3:  # Filter low-confidence results
+                    text_parts.append(text)
+            
+            return "\n".join(text_parts)
+            
+        except Exception as e:
+            raise Exception(f"EasyOCR extraction failed: {e}")
+    
+    async def _extract_text_tesseract(self, image: Image.Image, language: str = "en") -> str:
+        """Extract text using Tesseract"""
+        try:
+            # Configure Tesseract
+            config = f"--oem 3 --psm 6 -l {language}"
+            
+            # Extract text
+            text = pytesseract.image_to_string(image, config=config)
+            
+            return text.strip()
+            
+        except Exception as e:
+            raise Exception(f"Tesseract extraction failed: {e}")
+    
+    def _get_image_metadata(self, image: Image.Image, file_path: Path) -> Dict[str, Any]:
+        """Extract metadata from image"""
+        metadata = {
+            "width": image.width,
+            "height": image.height,
+            "mode": image.mode,
+            "format": image.format,
+            "file_size": file_path.stat().st_size
+        }
         
-        # Für sehr kurze Texte
-        if text_length < 1000:
-            return "paragraph"
+        # Add EXIF data if available
+        try:
+            if hasattr(image, '_getexif'):
+                exif = image._getexif()
+                if exif:
+                    metadata["has_exif"] = True
+                    # Add relevant EXIF data
+                    for tag_id, value in exif.items():
+                        if tag_id in [256, 257, 271, 272, 274, 306]:  # Common tags
+                            metadata[f"exif_{tag_id}"] = str(value)
+        except Exception:
+            pass
         
-        # Für gescannte Dokumente (OCR-Text ist oft weniger strukturiert)
-        if hasattr(self, 'ocr_info'):
-            return "sliding_window"
+        return metadata
+    
+    async def batch_process_images(
+        self, 
+        directory_path: Union[str, Path],
+        engine: str = None,
+        language: str = "en",
+        project_ids: List[str] = None,
+        recursive: bool = True
+    ) -> Dict[str, Any]:
+        """Batch process images in a directory"""
         
-        # Für strukturierte Texte
-        if file_type in ["md", "txt"] or (text.count('\n\n') / max(text.count('\n'), 1) > 0.3):
-            return "semantic"
+        directory_path = Path(directory_path)
+        engine = engine or self.default_engine
         
-        # Für PDFs
-        if file_type == "pdf":
-            return "hybrid"
+        if not directory_path.exists():
+            raise ValueError(f"Directory does not exist: {directory_path}")
         
-        return "paragraph"
+        # Find image files
+        if recursive:
+            files = [f for f in directory_path.rglob("*") if f.suffix.lower() in self.supported_image_formats]
+        else:
+            files = [f for f in directory_path.glob("*") if f.suffix.lower() in self.supported_image_formats]
+        
+        console.print(f"🖼️ Found {len(files)} image files for OCR processing")
+        
+        results = {
+            "total_files": len(files),
+            "processed": [],
+            "failed": [],
+            "engine_used": engine,
+            "language": language
+        }
+        
+        for file_path in files:
+            try:
+                console.print(f"🔄 Processing: {file_path.name}")
+                
+                result = await self.process_image_file(
+                    file_path=file_path,
+                    engine=engine,
+                    language=language,
+                    project_ids=project_ids
+                )
+                
+                results["processed"].append({
+                    "file": str(file_path),
+                    "document_id": result["document_id"],
+                    "text_length": result["text_length"],
+                    "status": "success"
+                })
+                
+            except Exception as e:
+                console.print(f"❌ Failed to process {file_path.name}: {e}")
+                results["failed"].append({
+                    "file": str(file_path),
+                    "error": str(e),
+                    "status": "failed"
+                })
+        
+        console.print(f"✅ Batch OCR complete: {len(results['processed'])} processed, {len(results['failed'])} failed")
+        return results
+    
+    def test_ocr_engines(self) -> Dict[str, Any]:
+        """Test all available OCR engines"""
+        results = {
+            "test_date": datetime.utcnow().isoformat(),
+            "engines": {}
+        }
+        
+        # Create a simple test image
+        test_image = Image.new('RGB', (200, 100), color='white')
+        
+        # Test Tesseract
+        if self.available_engines["tesseract"]:
+            try:
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                text = loop.run_until_complete(self._extract_text_tesseract(test_image))
+                results["engines"]["tesseract"] = {
+                    "status": "working",
+                    "test_result": len(text) >= 0
+                }
+            except Exception as e:
+                results["engines"]["tesseract"] = {
+                    "status": "error",
+                    "error": str(e)
+                }
+        else:
+            results["engines"]["tesseract"] = {"status": "not_available"}
+        
+        # Test EasyOCR
+        if self.available_engines["easyocr"]:
+            try:
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                text = loop.run_until_complete(self._extract_text_easyocr(test_image))
+                results["engines"]["easyocr"] = {
+                    "status": "working",
+                    "test_result": len(text) >= 0
+                }
+            except Exception as e:
+                results["engines"]["easyocr"] = {
+                    "status": "error",
+                    "error": str(e)
+                }
+        else:
+            results["engines"]["easyocr"] = {"status": "not_available"}
+        
+        return results
+    
+    def get_installation_guide(self) -> Dict[str, Any]:
+        """Get installation guide for OCR dependencies"""
+        return {
+            "required_packages": {
+                "pytesseract": {
+                    "pip_install": "pip install pytesseract",
+                    "system_requirements": {
+                        "ubuntu": "sudo apt-get install tesseract-ocr tesseract-ocr-deu",
+                        "macos": "brew install tesseract",
+                        "windows": "Download from: https://github.com/UB-Mannheim/tesseract/wiki"
+                    },
+                    "languages": "Install additional languages: tesseract-ocr-fra, tesseract-ocr-spa, etc."
+                },
+                "easyocr": {
+                    "pip_install": "pip install easyocr",
+                    "note": "Will download models on first use (~100MB per language)"
+                },
+                "pdf2image": {
+                    "pip_install": "pip install pdf2image",
+                    "system_requirements": {
+                        "ubuntu": "sudo apt-get install poppler-utils",
+                        "macos": "brew install poppler",
+                        "windows": "Download poppler from: https://blog.alivate.com.au/poppler-windows/"
+                    }
+                },
+                "opencv": {
+                    "pip_install": "pip install opencv-python",
+                    "note": "For image preprocessing (optional but recommended)"
+                }
+            },
+            "quick_setup": {
+                "linux": [
+                    "sudo apt-get update",
+                    "sudo apt-get install tesseract-ocr poppler-utils",
+                    "pip install pytesseract easyocr pdf2image opencv-python"
+                ],
+                "macos": [
+                    "brew install tesseract poppler",
+                    "pip install pytesseract easyocr pdf2image opencv-python"
+                ],
+                "windows": [
+                    "1. Download and install Tesseract from GitHub",
+                    "2. Download and install Poppler",
+                    "3. pip install pytesseract easyocr pdf2image opencv-python"
+                ]
+            }
+        }
 
-# Installation Helper
-def check_and_install_dependencies():
-    """Prüft und gibt Installationsanweisungen für fehlende Pakete"""
-    
-    missing_packages = []
-    
-    # Basis OCR
-    if not TESSERACT_AVAILABLE:
-        missing_packages.extend(["pytesseract", "pillow"])
-    
-    if not PDF2IMAGE_AVAILABLE:
-        missing_packages.append("pdf2image")
-    
-    if not OPENCV_AVAILABLE:
-        missing_packages.append("opencv-python")
-    
-    # Vector Embeddings
-    try:
-        import sentence_transformers
-        import faiss
-    except ImportError:
-        missing_packages.extend(["sentence-transformers", "faiss-cpu"])
-    
-    # Mehrsprachig
-    try:
-        import langdetect
-        import googletrans
-    except ImportError:
-        missing_packages.extend(["langdetect", "googletrans==4.0.0rc1"])
-    
-    if missing_packages:
-        print("📦 Fehlende Pakete für erweiterte Features:")
-        print(f"pip install {' '.join(set(missing_packages))}")
-        print()
-        print("🔧 Zusätzlich benötigt:")
-        print("- Tesseract OCR: https://github.com/tesseract-ocr/tesseract")
-        print("- Poppler (für pdf2image): https://poppler.freedesktop.org/")
-        return False
-    else:
-        print("✅ Alle Pakete für erweiterte Features verfügbar!")
-        return True
 
+# Global OCR processor instance
+ocr_processor = OCRProcessor()
+
+# Development helper
 if __name__ == "__main__":
-    # Test aller erweiterten Features
-    async def test_enhanced_features():
-        print("🧪 Test der erweiterten Features")
-        print("=" * 50)
-        
-        # Prüfe Dependencies
-        if not check_and_install_dependencies():
-            print("❌ Nicht alle Pakete verfügbar - installiere fehlende Pakete")
-            return
-        
-        # Teste OCR
-        ocr_processor = OCRProcessor()
-        print(f"OCR verfügbar: {ocr_processor.tesseract_available}")
-        print(f"PDF2Image verfügbar: {ocr_processor.pdf2image_available}")
-        
-        # Teste Enhanced Processor
-        enhanced_processor = EnhancedDocumentProcessor()
-        
-        # Statistiken
-        print("\n📊 Feature-Verfügbarkeit:")
-        print(f"   OCR: {'✅' if enhanced_processor.ocr_processor.tesseract_available else '❌'}")
-        print(f"   Mehrsprachig: {'✅' if enhanced_processor.multilingual_processor else '❌'}")
-        print(f"   Vector Embeddings: {'✅' if enhanced_processor.vector_manager and enhanced_processor.vector_manager.model else '❌'}")
-        
-        print("\n🎯 Erweiterte Features bereit für Integration!")
+    import json
+    import asyncio
     
-    asyncio.run(test_enhanced_features())
+    print("🔍 OCR Processor Status:")
+    processor = OCRProcessor()
+    status = processor.get_engine_status()
+    print(json.dumps(status, indent=2))
+    
+    print(f"\n✅ OCR Available: {processor.is_ocr_available()}")
+    print(f"🎯 Default Engine: {processor.default_engine}")
+    
+    # Test engines
+    if processor.is_ocr_available():
+        print(f"\n🧪 Testing OCR Engines:")
+        test_results = processor.test_ocr_engines()
+        for engine, result in test_results["engines"].items():
+            status_icon = "✅" if result["status"] == "working" else "❌" if result["status"] == "error" else "⚠️"
+            print(f"   {status_icon} {engine}: {result['status']}")
+    
+    # Installation guide
+    print(f"\n📋 Installation Guide:")
+    guide = processor.get_installation_guide()
+    print("Quick setup commands available in get_installation_guide()")
+
+                

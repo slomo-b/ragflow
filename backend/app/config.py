@@ -1,201 +1,150 @@
-# backend/app/config.py
-"""
-RagFlow Backend Configuration
-Zentrale Konfiguration für das Backend-System
-"""
-
+# backend/app/config.py - Pydantic v2 kompatibel mit flexibler Validierung
 import os
 from pathlib import Path
-from typing import Optional
-from pydantic import BaseSettings, Field
+from typing import Optional, List
+
+# Pydantic v2 Import - BaseSettings ist jetzt in pydantic-settings
+try:
+    from pydantic_settings import BaseSettings
+except ImportError:
+    # Fallback für ältere Pydantic Versionen
+    from pydantic import BaseSettings
+
+from pydantic import Field, ConfigDict
+
 
 class Settings(BaseSettings):
-    """Application settings"""
+    """Application settings with environment variable support"""
     
-    # API Configuration
-    API_VERSION: str = "v1"
-    API_PREFIX: str = f"/api/{API_VERSION}"
-    
-    # Google AI Configuration
-    GOOGLE_API_KEY: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
-    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", env="GEMINI_MODEL")
-    
-    # File Upload Configuration
-    MAX_FILE_SIZE: int = Field(default=50 * 1024 * 1024, env="MAX_FILE_SIZE")  # 50MB
-    ALLOWED_FILE_TYPES: list = [".pdf", ".docx", ".doc", ".txt", ".md"]
-    UPLOAD_DIR: str = Field(default="./uploads", env="UPLOAD_DIR")
-    
-    # Data Storage Configuration
-    DATA_DIR: str = Field(default="./data", env="DATA_DIR")
-    
-    # RAG Configuration
-    RAG_CHUNK_SIZE: int = Field(default=500, env="RAG_CHUNK_SIZE")
-    RAG_CHUNK_OVERLAP: int = Field(default=50, env="RAG_CHUNK_OVERLAP")
-    RAG_TOP_K: int = Field(default=5, env="RAG_TOP_K")
-    RAG_MIN_SIMILARITY: float = Field(default=0.1, env="RAG_MIN_SIMILARITY")
-    
-    # Search Configuration
-    TFIDF_MAX_FEATURES: int = Field(default=5000, env="TFIDF_MAX_FEATURES")
-    SEMANTIC_MIN_SIMILARITY: float = Field(default=0.2, env="SEMANTIC_MIN_SIMILARITY")
-    
-    # Chat Configuration
-    CHAT_MAX_CONTEXT_LENGTH: int = Field(default=8000, env="CHAT_MAX_CONTEXT_LENGTH")
-    CHAT_TEMPERATURE: float = Field(default=0.7, env="CHAT_TEMPERATURE")
-    
-    # Logging Configuration
-    LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
-    LOG_FILE: str = Field(default="ragflow_backend.log", env="LOG_FILE")
-    
-    # CORS Configuration
-    CORS_ORIGINS: list = Field(
-        default=["http://localhost:3000", "http://localhost:5173"],
-        env="CORS_ORIGINS"
+    # Pydantic v2 model configuration
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",  # Ignoriere unbekannte Felder statt Fehler
+        env_prefix="RAGFLOW_"
     )
     
-    # Development Configuration
-    DEBUG: bool = Field(default=False, env="DEBUG")
-    RELOAD: bool = Field(default=False, env="RELOAD")
+    # === APP CONFIG ===
+    app_name: str = Field(default="RagFlow Backend", description="Application name")
+    app_version: str = Field(default="3.0.0", description="Application version")
+    environment: str = Field(default="development", description="Environment (development/production)")
+    debug: bool = Field(default=True, description="Debug mode")
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    # === API KEYS ===
+    google_api_key: Optional[str] = Field(default=None, description="Google AI API Key", alias="GOOGLE_API_KEY")
+    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API Key (optional)")
+    
+    # === DIRECTORIES ===
+    data_dir: Path = Field(default=Path("./data"), description="Data directory")
+    upload_dir: Path = Field(default=Path("./uploads"), description="Upload directory")
+    chromadb_dir: Path = Field(default=Path("./data/chromadb"), description="ChromaDB directory")
+    
+    # === FILE PROCESSING ===
+    max_file_size: int = Field(default=50 * 1024 * 1024, description="Max file size (50MB)")
+    chunk_size: int = Field(default=1000, description="Text chunk size for RAG")
+    chunk_overlap: int = Field(default=100, description="Text chunk overlap")
+    
+    # === AI MODELS ===
+    gemini_model: str = Field(default="gemini-1.5-flash", description="Gemini model name")
+    embedding_model: str = Field(default="all-MiniLM-L6-v2", description="Sentence transformer model")
+    
+    # === RAG CONFIG ===
+    top_k: int = Field(default=5, description="Top K results for RAG search")
+    temperature: float = Field(default=0.7, description="AI temperature")
+    max_tokens: int = Field(default=1000, description="Max tokens for AI response")
+    
+    # === CHROMADB CONFIG ===
+    chromadb_anonymized_telemetry: bool = Field(default=False, description="ChromaDB telemetry")
+    chromadb_allow_reset: bool = Field(default=True, description="Allow ChromaDB reset (dev only)")
+    
+    # === LEGACY SUPPORT - Für Kompatibilität mit alter .env ===
+    # Diese Felder werden gelesen aber ignoriert - verhindert Validierungsfehler
+    rag_chunk_size: Optional[int] = Field(default=None, description="Legacy field")
+    rag_chunk_overlap: Optional[int] = Field(default=None, description="Legacy field") 
+    rag_top_k: Optional[int] = Field(default=None, description="Legacy field")
+    rag_min_similarity: Optional[float] = Field(default=None, description="Legacy field")
+    tfidf_max_features: Optional[int] = Field(default=None, description="Legacy field")
+    semantic_min_similarity: Optional[float] = Field(default=None, description="Legacy field")
+    chat_max_context_length: Optional[int] = Field(default=None, description="Legacy field")
+    chat_temperature: Optional[float] = Field(default=None, description="Legacy field")
+    log_level: Optional[str] = Field(default=None, description="Legacy field")
+    log_file: Optional[str] = Field(default=None, description="Legacy field")
+    cors_origins: Optional[str] = Field(default=None, description="Legacy field")
+    reload: Optional[bool] = Field(default=None, description="Legacy field")
+    
+    def model_post_init(self, __context) -> None:
+        """Post initialization - create directories and handle legacy values"""
+        # Create directories if they don't exist
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.chromadb_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Handle legacy field mappings
+        if self.rag_chunk_size and not hasattr(self, '_chunk_size_set'):
+            self.chunk_size = self.rag_chunk_size
+        if self.rag_chunk_overlap and not hasattr(self, '_chunk_overlap_set'):
+            self.chunk_overlap = self.rag_chunk_overlap
+        if self.rag_top_k and not hasattr(self, '_top_k_set'):
+            self.top_k = self.rag_top_k
+        if self.chat_temperature and not hasattr(self, '_temperature_set'):
+            self.temperature = self.chat_temperature
+        
+        # Validate API keys in production
+        if self.environment == "production":
+            if not self.google_api_key:
+                raise ValueError("GOOGLE_API_KEY is required in production")
+    
+    @property
+    def is_development(self) -> bool:
+        """Check if running in development mode"""
+        return self.environment.lower() in ["development", "dev", "local"]
+    
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production mode"""
+        return self.environment.lower() in ["production", "prod"]
+    
+    def get_database_url(self) -> str:
+        """Get ChromaDB database URL/path"""
+        return str(self.chromadb_dir.absolute())
+    
+    def summary(self) -> dict:
+        """Get configuration summary (without sensitive data)"""
+        return {
+            "app_name": self.app_name,
+            "app_version": self.app_version,
+            "environment": self.environment,
+            "debug": self.debug,
+            "google_api_configured": bool(self.google_api_key),
+            "openai_api_configured": bool(self.openai_api_key),
+            "data_dir": str(self.data_dir),
+            "upload_dir": str(self.upload_dir),
+            "chromadb_dir": str(self.chromadb_dir),
+            "max_file_size_mb": self.max_file_size // (1024 * 1024),
+            "chunk_size": self.chunk_size,
+            "chunk_overlap": self.chunk_overlap,
+            "embedding_model": self.embedding_model,
+            "top_k": self.top_k
+        }
+
 
 # Global settings instance
 settings = Settings()
 
-# Environment validation
-def validate_environment():
-    """Validate required environment variables and settings"""
-    errors = []
-    warnings = []
-    
-    # Check Google AI API Key
-    if not settings.GOOGLE_API_KEY:
-        warnings.append("GOOGLE_API_KEY not set - AI features will be limited")
-    
-    # Check directories
-    upload_dir = Path(settings.UPLOAD_DIR)
-    data_dir = Path(settings.DATA_DIR)
-    
-    try:
-        upload_dir.mkdir(exist_ok=True)
-        data_dir.mkdir(exist_ok=True)
-    except Exception as e:
-        errors.append(f"Cannot create directories: {e}")
-    
-    # Check file size limits
-    if settings.MAX_FILE_SIZE > 100 * 1024 * 1024:  # 100MB
-        warnings.append("MAX_FILE_SIZE is very large - may cause performance issues")
-    
-    # Check RAG settings
-    if settings.RAG_CHUNK_SIZE < 100:
-        warnings.append("RAG_CHUNK_SIZE is very small - may affect search quality")
-    
-    if settings.RAG_CHUNK_OVERLAP >= settings.RAG_CHUNK_SIZE:
-        errors.append("RAG_CHUNK_OVERLAP must be smaller than RAG_CHUNK_SIZE")
-    
-    return errors, warnings
-
-# Model and feature availability
-class FeatureFlags:
-    """Feature availability flags"""
-    
-    def __init__(self):
-        self.google_ai_available = bool(settings.GOOGLE_API_KEY)
-        self.sentence_transformers_available = self._check_sentence_transformers()
-        self.pdf_processing_available = self._check_pdf_processing()
-        self.docx_processing_available = self._check_docx_processing()
-    
-    def _check_sentence_transformers(self) -> bool:
-        try:
-            import sentence_transformers
-            return True
-        except ImportError:
-            return False
-    
-    def _check_pdf_processing(self) -> bool:
-        try:
-            import PyPDF2
-            return True
-        except ImportError:
-            try:
-                import pdfplumber
-                return True
-            except ImportError:
-                return False
-    
-    def _check_docx_processing(self) -> bool:
-        try:
-            import docx
-            return True
-        except ImportError:
-            return False
-    
-    def get_status_dict(self) -> dict:
-        return {
-            "google_ai": self.google_ai_available,
-            "sentence_transformers": self.sentence_transformers_available,
-            "pdf_processing": self.pdf_processing_available,
-            "docx_processing": self.docx_processing_available
-        }
-
-# Global feature flags
-feature_flags = FeatureFlags()
-
-# Development utilities
-def get_development_config():
-    """Get configuration for development environment"""
-    return {
-        "debug": True,
-        "reload": True,
-        "log_level": "DEBUG",
-        "cors_origins": ["*"],  # Allow all origins in development
-    }
-
-def get_production_config():
-    """Get configuration for production environment"""
-    return {
-        "debug": False,
-        "reload": False,
-        "log_level": "INFO",
-        "cors_origins": settings.CORS_ORIGINS,
-    }
-
-# Configuration summary
-def print_config_summary():
-    """Print configuration summary for debugging"""
-    print("\n" + "="*50)
-    print("RagFlow Backend Configuration")
-    print("="*50)
-    
-    print(f"Google AI Key: {'✓ Set' if settings.GOOGLE_API_KEY else '✗ Not set'}")
-    print(f"Model: {settings.GEMINI_MODEL}")
-    print(f"Upload Dir: {settings.UPLOAD_DIR}")
-    print(f"Data Dir: {settings.DATA_DIR}")
-    print(f"Max File Size: {settings.MAX_FILE_SIZE / (1024*1024):.1f} MB")
-    print(f"RAG Chunk Size: {settings.RAG_CHUNK_SIZE}")
-    print(f"Debug Mode: {settings.DEBUG}")
-    
-    print("\nFeature Availability:")
-    status = feature_flags.get_status_dict()
-    for feature, available in status.items():
-        print(f"  {feature}: {'✓' if available else '✗'}")
-    
-    # Validation
-    errors, warnings = validate_environment()
-    
-    if warnings:
-        print("\nWarnings:")
-        for warning in warnings:
-            print(f"  ⚠️  {warning}")
-    
-    if errors:
-        print("\nErrors:")
-        for error in errors:
-            print(f"  ❌ {error}")
-    
-    print("="*50 + "\n")
-
+# Development helper
 if __name__ == "__main__":
-    print_config_summary()
+    import json
+    print("🔧 RagFlow Configuration:")
+    print(json.dumps(settings.summary(), indent=2))
+    
+    # Check if all directories exist
+    print(f"\n📁 Directory Check:")
+    print(f"   Data dir exists: {settings.data_dir.exists()}")
+    print(f"   Upload dir exists: {settings.upload_dir.exists()}")
+    print(f"   ChromaDB dir exists: {settings.chromadb_dir.exists()}")
+    
+    # Check API keys
+    print(f"\n🔑 API Keys:")
+    print(f"   Google API: {'✅ Configured' if settings.google_api_key else '❌ Missing'}")
+    print(f"   OpenAI API: {'✅ Configured' if settings.openai_api_key else '⚠️ Optional'}")
